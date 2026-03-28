@@ -14,7 +14,7 @@
       --text-dim: #8b8fa3;
       --accent: #6c7bff;
       --success: #34d399;
-      --warning: #fbbf24;
+
     }
 
     *,
@@ -40,7 +40,7 @@
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.6; }
     }
 
     body {
@@ -172,10 +172,6 @@
 
     .progress-fill.success {
       background: var(--success);
-    }
-
-    .progress-fill.warning {
-      background: var(--warning);
     }
 
     .progress-label {
@@ -396,7 +392,7 @@
             <span class="progress-value">72%</span>
           </div>
           <div class="progress-bar">
-            <div class="progress-fill warning" data-target="72" role="progressbar" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-fill" data-target="72" role="progressbar" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100"></div>
           </div>
         </div>
         <div class="dash-card" data-testid="dashboard-progress-uptime">
