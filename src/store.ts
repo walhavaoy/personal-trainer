@@ -129,7 +129,11 @@ export function getExercises(filter?: ExerciseFilter): ExerciseItem[] {
 
   if (filter?.search) {
     const term = filter.search.trim().toLowerCase();
-    results = results.filter((e) => e.name.toLowerCase().includes(term));
+    results = results.filter(
+      (e) =>
+        e.name.toLowerCase().includes(term) ||
+        e.description.toLowerCase().includes(term),
+    );
   }
 
   if (filter?.muscleGroup) {
