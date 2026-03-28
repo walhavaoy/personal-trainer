@@ -1,0 +1,17 @@
+{
+  "name": "@tmpclaw/agent",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "pino": "^8.19.0"
+  },
+  "dependencies": {
+    "pino": "^8.19.0"
+  }
+}
