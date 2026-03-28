@@ -1,0 +1,22 @@
+{
+  "name": "personal-trainer",
+  "version": "0.2.0",
+  "description": "Personal Trainer - exercise and meal tracking API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "license": "PRIVATE",
+  "dependencies": {
+    "express": "^4.21.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0",
+    "@types/express": "^4.17.21"
+  }
+}
