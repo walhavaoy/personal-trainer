@@ -1,0 +1,16 @@
+{
+  "name": "personal-trainer",
+  "version": "0.1.1",
+  "description": "Personal Trainer - food and exercise library",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "license": "PRIVATE",
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}
