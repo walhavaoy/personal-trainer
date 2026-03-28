@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Trainer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --text-primary: #e4e4e4;
+      --text-secondary: #a8a8b3;
+      --accent: #e94560;
+      --accent-hover: #ff6b81;
+      --border: #2a2a4a;
+      --tab-active-bg: #0f3460;
+      --tab-inactive-bg: #16213e;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    header {
+      background-color: var(--bg-secondary);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .tab-nav {
+      display: flex;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .tab-nav button {
+      background: var(--tab-inactive-bg);
+      color: var(--text-secondary);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+    }
+
+    .tab-nav button:hover {
+      color: var(--text-primary);
+      background-color: var(--tab-active-bg);
+    }
+
+    .tab-nav button[aria-selected="true"] {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background-color: var(--tab-active-bg);
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 2rem;
+      max-width: 72rem;
+      margin: 0 auto;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .tab-panel h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    .tab-panel p {
+      color: var(--text-secondary);
+    }
+
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 40rem;
+      margin: 1rem auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Personal Trainer</h1>
+  </header>
+
+  <nav class="tab-nav" role="tablist" aria-label="Main navigation">
+    <button role="tab" aria-selected="true" aria-controls="panel-dashboard" id="tab-dashboard" data-tab="dashboard">Dashboard</button>
+    <button role="tab" aria-selected="false" aria-controls="panel-workouts" id="tab-workouts" data-tab="workouts">Workouts</button>
+    <button role="tab" aria-selected="false" aria-controls="panel-progress" id="tab-progress" data-tab="progress">Progress</button>
+    <button role="tab" aria-selected="false" aria-controls="panel-settings" id="tab-settings" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <section class="tab-panel active" role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard">
+      <h2>Dashboard</h2>
+      <div class="card">
+        <p>Welcome to your personal training dashboard.</p>
+      </div>
+    </section>
+
+    <section class="tab-panel" role="tabpanel" id="panel-workouts" aria-labelledby="tab-workouts" hidden>
+      <h2>Workouts</h2>
+      <div class="card">
+        <p>Manage and track your workout routines.</p>
+      </div>
+    </section>
+
+    <section class="tab-panel" role="tabpanel" id="panel-progress" aria-labelledby="tab-progress" hidden>
+      <h2>Progress</h2>
+      <div class="card">
+        <div class="chart-container">
+          <canvas id="progress-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden>
+      <h2>Settings</h2>
+      <div class="card">
+        <p>Configure your training preferences.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const tabNav = document.querySelector('.tab-nav');
+      const tabs = tabNav.querySelectorAll('[role="tab"]');
+      const panels = document.querySelectorAll('.tab-panel');
+
+      function activateTab(target) {
+        tabs.forEach(function (tab) {
+          const selected = tab.dataset.tab === target;
+          tab.setAttribute('aria-selected', String(selected));
+        });
+        panels.forEach(function (panel) {
+          const id = panel.id.replace('panel-', '');
+          if (id === target) {
+            panel.classList.add('active');
+            panel.removeAttribute('hidden');
+          } else {
+            panel.classList.remove('active');
+            panel.setAttribute('hidden', '');
+          }
+        });
+      }
+
+      tabNav.addEventListener('click', function (e) {
+        var btn = e.target.closest('[role="tab"]');
+        if (!btn) return;
+        activateTab(btn.dataset.tab);
+      });
+
+      tabNav.addEventListener('keydown', function (e) {
+        var currentTab = e.target.closest('[role="tab"]');
+        if (!currentTab) return;
+        var tabArr = Array.from(tabs);
+        var index = tabArr.indexOf(currentTab);
+        var next = -1;
+        if (e.key === 'ArrowRight') next = (index + 1) % tabArr.length;
+        else if (e.key === 'ArrowLeft') next = (index - 1 + tabArr.length) % tabArr.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = tabArr.length - 1;
+        if (next >= 0) {
+          e.preventDefault();
+          tabArr[next].focus();
+          activateTab(tabArr[next].dataset.tab);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
