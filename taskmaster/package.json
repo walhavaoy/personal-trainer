@@ -1,0 +1,23 @@
+{
+  "name": "@tmpclaw/taskmaster",
+  "version": "0.1.0",
+  "description": "Task database and REST API for tmpclaw platform",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}
