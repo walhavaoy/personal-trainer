@@ -71,7 +71,7 @@ export class Collection<T> {
   }
 
   /** Return all items as an array. */
-  getAll(): T[] {
+  list(): T[] {
     return Array.from(this.items.values());
   }
 
