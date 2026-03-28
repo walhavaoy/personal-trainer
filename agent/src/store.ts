@@ -35,7 +35,7 @@ export interface Setting {
 // Generic typed collection wrapping a Map
 // ---------------------------------------------------------------------------
 
-export class Collection<T extends { id?: string; key?: string }> {
+export class Collection<T> {
   private readonly items: Map<string, T>;
   private readonly collectionName: string;
 
@@ -44,19 +44,10 @@ export class Collection<T extends { id?: string; key?: string }> {
     this.collectionName = name;
   }
 
-  private resolveKey(item: T): string {
-    const key = (item as Record<string, unknown>).id ?? (item as Record<string, unknown>).key;
-    if (typeof key !== 'string' || key.length === 0) {
-      throw new Error(`Item in collection "${this.collectionName}" must have a non-empty id or key`);
-    }
-    return key;
-  }
-
-  /** Insert or replace an item. Returns the item. */
-  set(item: T): T {
-    const key = this.resolveKey(item);
-    this.items.set(key, item);
-    logger.debug({ collection: this.collectionName, key }, 'item set');
+  /** Insert or replace an item by id. Returns the item. */
+  set(id: string, item: T): T {
+    this.items.set(id, item);
+    logger.debug({ collection: this.collectionName, key: id }, 'item set');
     return item;
   }
 
