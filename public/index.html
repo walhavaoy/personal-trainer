@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Trainer - BMR Calculator</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card-bg: #ffffff;
+      --text: #1a1a1a;
+      --text-dim: #666666;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #d1d5db;
+      --error: #dc2626;
+      --success: #16a34a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @keyframes bmrReveal {
+      from {
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(1rem);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spinLoader {
+      to { transform: rotate(360deg); }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 32rem; width: 100%; }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .card h2 { font-size: 1.125rem; margin-bottom: 1rem; }
+    .form-group { margin-bottom: 0.75rem; }
+    label { display: block; font-size: 0.875rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+    input, select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      font-size: 1rem;
+      background: var(--card-bg);
+      color: var(--text);
+    }
+    input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+    button {
+      width: 100%;
+      padding: 0.625rem;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 0.375rem;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .message { padding: 0.5rem; border-radius: 0.375rem; font-size: 0.875rem; margin-top: 0.5rem; }
+    .message.error { background: #fef2f2; color: var(--error); }
+    .message.success { background: #f0fdf4; color: var(--success); }
+    .bmr-display { text-align: center; padding: 1.5rem 0; }
+    .bmr-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--primary);
+      transition: all 0.6s ease-out;
+    }
+    .bmr-unit { font-size: 1rem; color: var(--text-dim); }
+    .bmr-formula { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; }
+    .bmr-details { margin-top: 1rem; font-size: 0.875rem; color: var(--text-dim); }
+    .bmr-details dt { font-weight: 600; display: inline; }
+    .bmr-details dd { display: inline; margin-left: 0.25rem; margin-right: 1rem; }
+    #bmr-result {
+      opacity: 0;
+      transform: translateY(1rem);
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+      display: none;
+    }
+    #bmr-result.visible {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .bmr-value.animated {
+      animation: bmrReveal 0.6s ease-out;
+    }
+
+    .loader {
+      display: none;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spinLoader 0.6s linear infinite;
+      margin: 0.5rem auto 0;
+    }
+    .loader.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Personal Trainer - BMR Calculator</h1>
+
+    <div class="card">
+      <h2>Your Profile</h2>
+      <form id="profile-form">
+        <div class="form-group">
+          <label for="heightCm">Height (cm)</label>
+          <input type="number" id="heightCm" name="heightCm" min="1" step="0.1" required placeholder="e.g. 175">
+        </div>
+        <div class="form-group">
+          <label for="weightKg">Weight (kg)</label>
+          <input type="number" id="weightKg" name="weightKg" min="1" step="0.1" required placeholder="e.g. 70">
+        </div>
+        <div class="form-group">
+          <label for="ageYears">Age (years)</label>
+          <input type="number" id="ageYears" name="ageYears" min="1" step="1" required placeholder="e.g. 30">
+        </div>
+        <div class="form-group">
+          <label for="sex">Sex</label>
+          <select id="sex" name="sex" required>
+            <option value="">Select...</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+        <button type="submit" id="submit-btn">Calculate BMR</button>
+        <div class="loader" id="loader" aria-label="Calculating"></div>
+        <div id="form-message"></div>
+      </form>
+    </div>
+
+    <div class="card" id="bmr-result">
+      <h2>Your Basal Metabolic Rate</h2>
+      <div class="bmr-display">
+        <span class="bmr-value" id="bmr-value">--</span>
+        <span class="bmr-unit">kcal/day</span>
+        <div class="bmr-formula">Calculated using the Mifflin-St Jeor equation</div>
+      </div>
+      <dl class="bmr-details">
+        <dt>Height:</dt><dd id="detail-height">--</dd>
+        <dt>Weight:</dt><dd id="detail-weight">--</dd>
+        <dt>Age:</dt><dd id="detail-age">--</dd>
+        <dt>Sex:</dt><dd id="detail-sex">--</dd>
+      </dl>
+    </div>
+  </div>
+
+  <script>
+    var PROFILE_ID = 'default';
+    var form = document.getElementById('profile-form');
+    var messageEl = document.getElementById('form-message');
+    var submitBtn = document.getElementById('submit-btn');
+    var loader = document.getElementById('loader');
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function showMessage(text, type) {
+      messageEl.textContent = text;
+      messageEl.className = 'message ' + type;
+    }
+
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      loader.className = isLoading ? 'loader active' : 'loader';
+    }
+
+    function showResult(result) {
+      var resultEl = document.getElementById('bmr-result');
+      var bmrValueEl = document.getElementById('bmr-value');
+
+      bmrValueEl.textContent = Math.round(result.bmr * 100) / 100;
+      document.getElementById('detail-height').textContent = escapeHtml(result.profile.heightCm + ' cm');
+      document.getElementById('detail-weight').textContent = escapeHtml(result.profile.weightKg + ' kg');
+      document.getElementById('detail-age').textContent = escapeHtml(result.profile.ageYears + ' years');
+      document.getElementById('detail-sex').textContent = escapeHtml(result.profile.sex);
+
+      resultEl.style.display = 'block';
+      bmrValueEl.classList.remove('animated');
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          resultEl.classList.add('visible');
+          bmrValueEl.classList.add('animated');
+        });
+      });
+    }
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      messageEl.textContent = '';
+      messageEl.className = '';
+
+      var data = {
+        heightCm: parseFloat(document.getElementById('heightCm').value),
+        weightKg: parseFloat(document.getElementById('weightKg').value),
+        ageYears: parseInt(document.getElementById('ageYears').value, 10),
+        sex: document.getElementById('sex').value,
+      };
+
+      if (!data.heightCm || !data.weightKg || !data.ageYears || !data.sex) {
+        showMessage('Please fill in all fields with valid values.', 'error');
+        return;
+      }
+
+      setLoading(true);
+
+      fetch('/api/profile/' + encodeURIComponent(PROFILE_ID), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }).then(function (profileRes) {
+        if (!profileRes.ok) {
+          return profileRes.json().then(function (err) {
+            throw new Error(err.error || 'Failed to save profile.');
+          });
+        }
+        return fetch('/api/bmr/' + encodeURIComponent(PROFILE_ID));
+      }).then(function (bmrRes) {
+        if (!bmrRes.ok) {
+          return bmrRes.json().then(function (err) {
+            throw new Error(err.error || 'Failed to calculate BMR.');
+          });
+        }
+        return bmrRes.json();
+      }).then(function (result) {
+        showResult(result);
+        showMessage('BMR calculated successfully!', 'success');
+      }).catch(function (err) {
+        showMessage(err.message || 'Network error. Please try again.', 'error');
+      }).finally(function () {
+        setLoading(false);
+      });
+    });
+  </script>
+</body>
+</html>
