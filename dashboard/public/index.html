@@ -217,7 +217,7 @@
   </div>
 
   <main>
-    <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" class="active">
+    <div role="tabpanel" id="panel-overview" data-tab="overview" aria-labelledby="tab-overview" class="active">
       <h2>Overview</h2>
       <div class="dash-grid">
         <div class="dash-card">
@@ -239,7 +239,7 @@
       </div>
     </div>
 
-    <div role="tabpanel" id="panel-tasks" aria-labelledby="tab-tasks">
+    <div role="tabpanel" id="panel-tasks" data-tab="tasks" aria-labelledby="tab-tasks">
       <h2>Tasks</h2>
       <div class="dash-card">
         <table class="task-table">
@@ -279,7 +279,7 @@
       </div>
     </div>
 
-    <div role="tabpanel" id="panel-metrics" aria-labelledby="tab-metrics">
+    <div role="tabpanel" id="panel-metrics" data-tab="metrics" aria-labelledby="tab-metrics">
       <h2>Metrics</h2>
       <div class="dash-card">
         <div class="chart-container">
@@ -288,7 +288,7 @@
       </div>
     </div>
 
-    <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings">
+    <div role="tabpanel" id="panel-settings" data-tab="settings" aria-labelledby="tab-settings">
       <h2>Settings</h2>
       <div class="dash-card">
         <form class="settings-form">
@@ -324,8 +324,7 @@
           tab.setAttribute('tabindex', selected ? '0' : '-1');
         });
         panels.forEach(function (panel) {
-          var id = panel.id.replace('panel-', '');
-          if (id === target) {
+          if (panel.dataset.tab === target) {
             panel.classList.add('active');
           } else {
             panel.classList.remove('active');
