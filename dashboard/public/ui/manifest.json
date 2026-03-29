@@ -1,5 +1,8 @@
 {
+  "id": "dashboard",
   "name": "dashboard",
+  "title": "Dashboard",
   "version": "0.1.0",
+  "entrypoint": "../index.html",
   "bundlePath": "../index.html"
 }
