@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Dashboard — tmpclaw</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242836;
+      --border: #2e3347;
+      --text: #e2e4ea;
+      --text-dim: #8b8fa3;
+      --accent: #6c7bff;
+      --success: #34d399;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    header {
+      background-color: var(--surface);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      margin: -1rem -1rem 0 -1rem;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 0;
+    }
+
+    [role="tablist"] {
+      display: flex;
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      margin: 0 -1rem;
+      overflow-x: auto;
+    }
+
+    [role="tab"] {
+      background: var(--surface);
+      color: var(--text-dim);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+    }
+
+    [role="tab"]:hover {
+      color: var(--text);
+      background-color: var(--surface2);
+    }
+
+    [role="tab"][aria-selected="true"] {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background-color: var(--surface2);
+    }
+
+    [role="tabpanel"] {
+      display: none;
+      padding: 1.5rem 0;
+    }
+
+    [role="tabpanel"].active {
+      display: block;
+    }
+
+    [role="tabpanel"] h2 {
+      font-size: 1.25rem;
+      margin: 0 0 1rem 0;
+      color: var(--text);
+    }
+
+    .dash-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .dash-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }
+
+    .dash-card h3 {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin: 0 0 0.5rem 0;
+      font-weight: 500;
+    }
+
+    .dash-card .value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .dash-card .value.accent {
+      color: var(--accent);
+    }
+
+    .dash-card .value.success {
+      color: var(--success);
+    }
+
+    .task-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    .task-table th,
+    .task-table td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .task-table th {
+      color: var(--text-dim);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .task-table td {
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge.running {
+      background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+    }
+
+    .status-badge.completed {
+      background-color: color-mix(in srgb, var(--success) 20%, transparent);
+      color: var(--success);
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 40rem;
+      margin: 1rem auto;
+    }
+
+    .settings-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 30rem;
+    }
+
+    .settings-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      color: var(--text-dim);
+      font-size: 0.875rem;
+    }
+
+    .settings-form input,
+    .settings-form select {
+      background-color: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agent Dashboard</h1>
+  </header>
+
+  <div role="tablist" aria-label="Dashboard navigation">
+    <button role="tab" data-action="switch-tab" data-tab="overview" aria-selected="true" aria-controls="panel-overview" id="tab-overview" tabindex="0" data-testid="dashboard-tab-overview">Overview</button>
+    <button role="tab" data-action="switch-tab" data-tab="tasks" aria-selected="false" aria-controls="panel-tasks" id="tab-tasks" tabindex="-1" data-testid="dashboard-tab-tasks">Tasks</button>
+    <button role="tab" data-action="switch-tab" data-tab="metrics" aria-selected="false" aria-controls="panel-metrics" id="tab-metrics" tabindex="-1" data-testid="dashboard-tab-metrics">Metrics</button>
+    <button role="tab" data-action="switch-tab" data-tab="settings" aria-selected="false" aria-controls="panel-settings" id="tab-settings" tabindex="-1" data-testid="dashboard-tab-settings">Settings</button>
+  </div>
+
+  <main>
+    <div role="tabpanel" id="panel-overview" data-tab="overview" aria-labelledby="tab-overview" class="active">
+      <h2>Overview</h2>
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>Active Agents</h3>
+          <span class="value accent">12</span>
+        </div>
+        <div class="dash-card">
+          <h3>Running Tasks</h3>
+          <span class="value accent">5</span>
+        </div>
+        <div class="dash-card">
+          <h3>Builds Today</h3>
+          <span class="value">18</span>
+        </div>
+        <div class="dash-card">
+          <h3>Success Rate</h3>
+          <span class="value success">96%</span>
+        </div>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-tasks" data-tab="tasks" aria-labelledby="tab-tasks">
+      <h2>Tasks</h2>
+      <div class="dash-card">
+        <table class="task-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Agent</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TSK-1042</td>
+              <td>Build operator image</td>
+              <td>builder-agent-01</td>
+              <td><span class="status-badge running">Running</span></td>
+              <td>2026-03-28</td>
+            </tr>
+            <tr>
+              <td>TSK-1041</td>
+              <td>Rollout portal chart</td>
+              <td>deploy-agent-03</td>
+              <td><span class="status-badge completed">Completed</span></td>
+              <td>2026-03-27</td>
+            </tr>
+            <tr>
+              <td>TSK-1040</td>
+              <td>Run integration tests</td>
+              <td>test-agent-02</td>
+              <td><span class="status-badge completed">Completed</span></td>
+              <td>2026-03-27</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-metrics" data-tab="metrics" aria-labelledby="tab-metrics">
+      <h2>Metrics</h2>
+      <div class="dash-card">
+        <div class="chart-container">
+          <canvas id="metricsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-settings" data-tab="settings" aria-labelledby="tab-settings">
+      <h2>Settings</h2>
+      <div class="dash-card">
+        <form class="settings-form">
+          <label>
+            Agent Timeout (seconds)
+            <input type="number" value="300" min="30" max="3600">
+          </label>
+          <label>
+            Log Level
+            <select>
+              <option value="debug">Debug</option>
+              <option value="info" selected>Info</option>
+              <option value="warn">Warn</option>
+              <option value="error">Error</option>
+            </select>
+          </label>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (function () {
+      var tablist = document.querySelector('[role="tablist"]');
+      var tabs = tablist.querySelectorAll('[role="tab"]');
+      var panels = document.querySelectorAll('[role="tabpanel"]');
+
+      function activateTab(target) {
+        tabs.forEach(function (tab) {
+          var selected = tab.dataset.tab === target;
+          tab.setAttribute('aria-selected', String(selected));
+          tab.setAttribute('tabindex', selected ? '0' : '-1');
+        });
+        panels.forEach(function (panel) {
+          if (panel.dataset.tab === target) {
+            panel.classList.add('active');
+          } else {
+            panel.classList.remove('active');
+          }
+        });
+      }
+
+      tablist.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-action="switch-tab"]');
+        if (!btn) return;
+        activateTab(btn.dataset.tab);
+      });
+
+      tablist.addEventListener('keydown', function (e) {
+        var currentTab = e.target.closest('[role="tab"]');
+        if (!currentTab) return;
+        var tabArr = Array.from(tabs);
+        var index = tabArr.indexOf(currentTab);
+        var next = -1;
+        if (e.key === 'ArrowRight') next = (index + 1) % tabArr.length;
+        else if (e.key === 'ArrowLeft') next = (index - 1 + tabArr.length) % tabArr.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = tabArr.length - 1;
+        if (next >= 0) {
+          e.preventDefault();
+          tabArr[next].focus();
+          activateTab(tabArr[next].dataset.tab);
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var ctx = document.getElementById('metricsChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+              label: 'Tasks Completed',
+              data: [120, 135, 98, 142, 156, 89, 107],
+              borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+              backgroundColor: 'rgba(108, 123, 255, 0.1)',
+              tension: 0.3,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() },
+                grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border').trim() }
+              },
+              y: {
+                ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() },
+                grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border').trim() },
+                beginAtZero: true
+              }
+            }
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
