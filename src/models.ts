@@ -37,3 +37,41 @@ export interface WorkoutRow {
   calories_burned: number;
   created_at: string;
 }
+
+export interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  mealType: MealType;
+  createdAt: string;
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export const MEAL_TYPES: readonly MealType[] = [
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+] as const;
+
+export interface CreateMealRequest {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  mealType: MealType;
+}
+
+export interface UpdateMealRequest {
+  name?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  mealType?: MealType;
+}

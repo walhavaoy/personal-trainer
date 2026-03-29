@@ -5,6 +5,7 @@ import path from 'path';
 import { logger } from './logger';
 import { initDb, closeDb } from './db';
 import { workoutsRouter } from './routes/workouts';
+import { mealsRouter } from './routes/meals';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use(pinoHttp({ logger }));
 
 app.use('/api/workouts', workoutsRouter);
+app.use('/api/meals', mealsRouter);
 
 app.get('/healthz', (_req, res) => {
   res.json({ status: 'ok' });

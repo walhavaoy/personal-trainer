@@ -1,6 +1,6 @@
 {
   "name": "personal-trainer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal Trainer API with workout tracking and calorie calculation",
   "main": "dist/index.js",
   "scripts": {
