@@ -14,45 +14,45 @@
     '}',
 
     '/* --- Loading skeleton --- */',
-    '.nd-skeleton {',
+    '.ndash-skeleton {',
     '  display: flex;',
     '  flex-direction: column;',
     '  gap: 1rem;',
     '}',
-    '.nd-skeleton-header {',
+    '.ndash-skeleton-header {',
     '  height: 2rem;',
     '  width: 40%;',
     '  border-radius: 0.25rem;',
     '  background: var(--surface);',
-    '  animation: nd-pulse 1.5s ease-in-out infinite;',
+    '  animation: ndash-pulse 1.5s ease-in-out infinite;',
     '}',
-    '.nd-skeleton-row {',
+    '.ndash-skeleton-row {',
     '  display: flex;',
     '  gap: 1rem;',
     '}',
-    '.nd-skeleton-card {',
+    '.ndash-skeleton-card {',
     '  flex: 1;',
     '  height: 6rem;',
     '  border-radius: 0.5rem;',
     '  background: var(--surface);',
-    '  animation: nd-pulse 1.5s ease-in-out infinite;',
+    '  animation: ndash-pulse 1.5s ease-in-out infinite;',
     '}',
-    '.nd-skeleton-card:nth-child(2) { animation-delay: 0.15s; }',
-    '.nd-skeleton-card:nth-child(3) { animation-delay: 0.3s; }',
-    '.nd-skeleton-table {',
+    '.ndash-skeleton-card:nth-child(2) { animation-delay: 0.15s; }',
+    '.ndash-skeleton-card:nth-child(3) { animation-delay: 0.3s; }',
+    '.ndash-skeleton-table {',
     '  height: 12rem;',
     '  border-radius: 0.5rem;',
     '  background: var(--surface);',
-    '  animation: nd-pulse 1.5s ease-in-out infinite;',
+    '  animation: ndash-pulse 1.5s ease-in-out infinite;',
     '  animation-delay: 0.45s;',
     '}',
-    '@keyframes nd-pulse {',
-    '  0%, 100% { filter: brightness(0.6); }',
-    '  50%      { filter: brightness(1); }',
+    '@keyframes ndash-pulse {',
+    '  0%, 100% { opacity: 0.1; }',
+    '  50%      { opacity: 0.2; }',
     '}',
 
     '/* --- Empty state --- */',
-    '.nd-empty {',
+    '.empty-state {',
     '  display: flex;',
     '  flex-direction: column;',
     '  align-items: center;',
@@ -63,25 +63,25 @@
     '  border-radius: 0.5rem;',
     '  margin-top: 1.5rem;',
     '}',
-    '.nd-empty-icon {',
+    '.empty-state-icon {',
     '  font-size: 3rem;',
     '  line-height: 1;',
     '  margin-bottom: 1rem;',
     '  color: var(--text-dim);',
     '}',
-    '.nd-empty-title {',
+    '.empty-state-title {',
     '  font-size: 1.25rem;',
     '  font-weight: 600;',
     '  margin: 0 0 0.5rem;',
     '  color: var(--text);',
     '}',
-    '.nd-empty-subtitle {',
+    '.empty-state-subtitle {',
     '  font-size: 0.875rem;',
     '  color: var(--text-dim);',
     '  margin: 0 0 1.5rem;',
     '  max-width: 28rem;',
     '}',
-    '.nd-empty-action {',
+    '.empty-state-action {',
     '  display: inline-flex;',
     '  align-items: center;',
     '  gap: 0.375rem;',
@@ -95,12 +95,12 @@
     '  cursor: pointer;',
     '  transition: background 0.15s ease;',
     '}',
-    '.nd-empty-action:hover,',
-    '.nd-empty-action:focus-visible {',
+    '.empty-state-action:hover,',
+    '.empty-state-action:focus-visible {',
     '  filter: brightness(1.15);',
     '  outline: none;',
     '}',
-    '.nd-empty-action:focus-visible {',
+    '.empty-state-action:focus-visible {',
     '  box-shadow: 0 0 0 0.125rem var(--accent);',
     '}',
 
@@ -214,28 +214,28 @@
   /* ------------------------------------------------------------------ */
 
   function renderSkeleton() {
-    return '<div class="nd-skeleton" data-testid="nd-skeleton-container" role="status" aria-label="Loading nutrition data">'
-      + '<div class="nd-skeleton-header"></div>'
-      + '<div class="nd-skeleton-row">'
-      + '<div class="nd-skeleton-card"></div>'
-      + '<div class="nd-skeleton-card"></div>'
-      + '<div class="nd-skeleton-card"></div>'
+    return '<div class="ndash-skeleton" data-testid="ndash-skeleton-container" role="status" aria-label="Loading nutrition data">'
+      + '<div class="ndash-skeleton-header"></div>'
+      + '<div class="ndash-skeleton-row">'
+      + '<div class="ndash-skeleton-card"></div>'
+      + '<div class="ndash-skeleton-card"></div>'
+      + '<div class="ndash-skeleton-card"></div>'
       + '</div>'
-      + '<div class="nd-skeleton-table"></div>'
+      + '<div class="ndash-skeleton-table"></div>'
       + '<span style="position:absolute;width:0.0625rem;height:0.0625rem;overflow:hidden;clip:rect(0,0,0,0)">Loading...</span>'
       + '</div>';
   }
 
   function renderEmpty() {
-    return '<div class="nd-empty" data-testid="nd-empty-container">'
-      + '<div class="nd-empty-icon" aria-hidden="true">'
+    return '<div class="empty-state" data-testid="empty-state-container">'
+      + '<div class="empty-state-icon" aria-hidden="true">'
       + '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
       + '<path d="M3 3h18v18H3z"/><path d="M8 12h8"/><path d="M12 8v8"/>'
       + '</svg>'
       + '</div>'
-      + '<p class="nd-empty-title">No nutrition data yet</p>'
-      + '<p class="nd-empty-subtitle">Start logging meals to see your daily nutrition summary, macro breakdown, and meal history here.</p>'
-      + '<button class="nd-empty-action" data-action="log-meal" data-testid="nd-button-logMeal" type="button">+ Log your first meal</button>'
+      + '<p class="empty-state-title">No nutrition data yet</p>'
+      + '<p class="empty-state-subtitle">Start logging meals to see your daily nutrition summary, macro breakdown, and meal history here.</p>'
+      + '<button class="empty-state-action" data-action="log-meal" data-testid="nd-button-logMeal" type="button">+ Log your first meal</button>'
       + '</div>';
   }
 
