@@ -30,6 +30,9 @@ const summaryCoach = document.getElementById('summary-coach');
 const previewList = document.getElementById('preview-list');
 const resetButton = document.getElementById('reset-button');
 const resetStatus = document.getElementById('reset-status');
+const backfillForm = document.getElementById('backfill-form');
+const backfillPrescription = document.getElementById('backfill-prescription');
+const backfillStatus = document.getElementById('backfill-status');
 
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
 
@@ -397,6 +400,54 @@ async function loadSummary() {
 
   summaryEl.hidden = false;
 }
+
+// When the date input changes, fetch the prescribed session for that date
+// so the user knows what they were supposed to do before they fill in minutes.
+backfillForm.elements['date'].addEventListener('change', async () => {
+  const d = backfillForm.elements['date'].value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    backfillPrescription.textContent = '';
+    return;
+  }
+  const r = await fetch('/api/me/session?date=' + encodeURIComponent(d));
+  if (!r.ok) {
+    backfillPrescription.textContent = '';
+    return;
+  }
+  const s = await r.json();
+  if (s.theme === 'Rest') {
+    backfillPrescription.textContent = `${s.dayOfWeek} was a Rest day. Leave minutes at 0 to log a rest.`;
+    backfillForm.elements['completedMinutes'].value = 0;
+  } else {
+    backfillPrescription.textContent = `${s.dayOfWeek} · ${s.theme} · ${s.totalMinutes} min planned`;
+    backfillForm.elements['completedMinutes'].value = s.totalMinutes;
+  }
+});
+
+backfillForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  backfillStatus.textContent = 'Saving…';
+  const payload = {
+    date: backfillForm.elements['date'].value,
+    completedMinutes: parseInt(backfillForm.elements['completedMinutes'].value, 10) || 0,
+    notes: backfillForm.elements['notes'].value || undefined,
+  };
+  const r = await fetch('/api/me/workouts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: 'failed' }));
+    backfillStatus.textContent = 'Error: ' + (err.error || 'failed');
+    return;
+  }
+  backfillStatus.textContent = 'Saved.';
+  backfillForm.elements['notes'].value = '';
+  await loadHistory();
+  await loadSummary();
+  await loadTrend();
+});
 
 resetButton.addEventListener('click', async () => {
   const phrase = prompt('Type DELETE to wipe every workout you have logged. This cannot be undone.');

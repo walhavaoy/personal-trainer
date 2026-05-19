@@ -519,6 +519,31 @@ app.get('/api/me/trend', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/me/session', async (req: Request, res: Response) => {
+  // Like /api/me/today but for any ISO date. Used by the backfill UI so the
+  // user can see what was prescribed when they pick a past date. Baseline
+  // adaptation only — no compliance lookup, since the user hasn't logged it
+  // yet (that's the whole point of the form).
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const dateParam = req.query['date'];
+  if (typeof dateParam !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+    res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    const at = new Date(`${dateParam}T12:00:00Z`);
+    res.json(deriveSession(profile, at, undefined, 'baseline'));
+  } catch (err) {
+    logger.error({ err, username: user.username, date: dateParam }, 'Failed to derive session');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/me/preview', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

@@ -114,6 +114,9 @@ form button:hover { filter: brightness(1.1); }
   font-size: 0.92rem;
 }
 .log-done-feedback { margin-top: 0.2rem; font-size: 0.88rem; }
+.backfill-summary { cursor: pointer; color: var(--accent); padding: 0.25rem 0; }
+.backfill-summary:hover { filter: brightness(1.1); }
+.backfill-prescription { margin-bottom: 0.75rem; font-size: 0.9rem; }
 
 /* Make the trend chart shrink to its container on narrow screens. */
 #summary-trend-svg { max-width: 100%; height: auto; }

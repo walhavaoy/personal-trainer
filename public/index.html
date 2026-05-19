@@ -78,6 +78,29 @@
         </div>
       </section>
 
+      <section id="backfill">
+        <details>
+          <summary class="backfill-summary">Log a past workout</summary>
+          <form id="backfill-form" data-testid="pt-form-backfill">
+            <label>
+              Date
+              <input type="date" name="date" data-testid="pt-input-backfill-date" required />
+            </label>
+            <div id="backfill-prescription" class="muted backfill-prescription"></div>
+            <label>
+              Minutes completed
+              <input type="number" name="completedMinutes" min="0" max="1000" step="1" data-testid="pt-input-backfill-completed" required />
+            </label>
+            <label>
+              Notes (optional)
+              <input type="text" name="notes" maxlength="500" data-testid="pt-input-backfill-notes" placeholder="What did you do?" />
+            </label>
+            <button type="submit" data-testid="pt-button-backfill">Save past workout</button>
+            <span id="backfill-status" class="muted"></span>
+          </form>
+        </details>
+      </section>
+
       <section id="preview">
         <h3>Coming up</h3>
         <ul id="preview-list" data-testid="pt-list-preview"></ul>
