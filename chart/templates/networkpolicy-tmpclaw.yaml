@@ -1,0 +1,33 @@
+{{- /*
+Allow pods in project-pt to connect to Postgres (which lives in the tmpclaw
+namespace). This NetworkPolicy mirrors the allow-*-to-postgres pattern used by
+other realms (loan, designsprint, perhonen) and must live in the tmpclaw
+namespace so it sits next to the postgres pod selector it constrains.
+
+Installing a resource into a different namespace via Helm requires the deploy
+service account to have write access there. If that ever stops working, this
+template can be moved to deploy/manifests/ for a cluster admin to apply
+out-of-band — the netpol itself doesn't change.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pt-to-postgres
+  namespace: tmpclaw
+  labels:
+    app: pt
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: project-pt
+      ports:
+        - port: 5432
+          protocol: TCP
