@@ -174,6 +174,24 @@ async function loadHistory() {
   historyList.hidden = false;
 }
 
+// One-line trainer reaction to a completed workout. Pure function of the row.
+function postWorkoutFeedback(w) {
+  if (w.theme === 'Rest') return 'Recovery counts as training.';
+  const planned = Math.max(1, w.plannedMinutes || 0);
+  const ratio = (w.completedMinutes || 0) / planned;
+  const exDone = Array.isArray(w.exercisesCompleted) ? w.exercisesCompleted.length : 0;
+
+  let reaction;
+  if (ratio >= 1.0)       reaction = exDone > 0
+    ? `Strong session — target met and ${exDone} exercise${exDone === 1 ? '' : 's'} checked.`
+    : 'Strong session — target met.';
+  else if (ratio >= 0.8)  reaction = 'Solid — most of it done.';
+  else if (ratio >= 0.5)  reaction = 'Got the main work in.';
+  else if (w.completedMinutes > 0) reaction = 'Counts. Tomorrow we go again.';
+  else                    reaction = 'Logged at zero — own it and aim higher tomorrow.';
+  return reaction;
+}
+
 function reflectTodayLogged(workouts) {
   // Date the user is *currently looking at* — pulled from the loaded session.
   const today = logForm.dataset.date;
@@ -182,10 +200,18 @@ function reflectTodayLogged(workouts) {
   if (t) {
     logForm.hidden = true;
     logDone.hidden = false;
-    const label = t.theme === 'Rest'
+    const headline = t.theme === 'Rest'
       ? `Rest day taken — nothing logged today.`
       : `Logged today: ${t.completedMinutes}/${t.plannedMinutes} min · ${t.theme}`;
-    logDone.textContent = label;
+    logDone.innerHTML = '';
+    const head = document.createElement('div');
+    head.textContent = headline;
+    const feedback = document.createElement('div');
+    feedback.className = 'muted log-done-feedback';
+    feedback.dataset.testid = 'pt-text-feedback';
+    feedback.textContent = postWorkoutFeedback(t);
+    logDone.appendChild(head);
+    logDone.appendChild(feedback);
   } else {
     logForm.hidden = false;
     logDone.hidden = true;
