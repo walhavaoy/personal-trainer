@@ -207,6 +207,84 @@ app.get('/api/me/workouts', async (req: Request, res: Response) => {
   }
 });
 
+app.patch('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ error: 'id must be a positive integer' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const completed = body['completedMinutes'];
+  const notesInput = body['notes'];
+  // Allow null to clear notes; reject other non-string types
+  let notes: string | null | undefined;
+  if (notesInput === undefined) notes = undefined;
+  else if (notesInput === null) notes = null;
+  else if (typeof notesInput === 'string' && notesInput.length <= 500) notes = notesInput;
+  else { res.status(400).json({ error: 'notes must be a string (≤500 chars) or null' }); return; }
+
+  if (completed !== undefined && (typeof completed !== 'number' || !Number.isInteger(completed) || completed < 0 || completed > 1000)) {
+    res.status(400).json({ error: 'completedMinutes must be an integer between 0 and 1000' });
+    return;
+  }
+  if (completed === undefined && notes === undefined) {
+    res.status(400).json({ error: 'must update at least one of completedMinutes, notes' });
+    return;
+  }
+
+  try {
+    const result = await pool.query<WorkoutRow>(
+      `UPDATE pt_workout
+          SET completed_minutes = COALESCE($3, completed_minutes),
+              notes             = CASE WHEN $4::bool THEN $5 ELSE notes END
+        WHERE id = $1::bigint AND username = $2
+        RETURNING *`,
+      [id, user.username, completed ?? null, notes !== undefined, notes],
+    );
+    if (result.rows.length === 0) {
+      // 404 (not 403) on someone else's row — don't leak that the id exists.
+      res.status(404).json({ error: 'Workout not found' });
+      return;
+    }
+    res.json(workoutToJson(result.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username, id }, 'Failed to update workout');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ error: 'id must be a positive integer' });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      'DELETE FROM pt_workout WHERE id = $1::bigint AND username = $2',
+      [id, user.username],
+    );
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Workout not found' });
+      return;
+    }
+    res.status(204).end();
+  } catch (err) {
+    logger.error({ err, username: user.username, id }, 'Failed to delete workout');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/me/workouts', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

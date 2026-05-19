@@ -89,3 +89,11 @@ form button:hover { filter: brightness(1.1); }
 .coach-message--down { border-left-color: #f5b041; }
 .coach-message--flat { border-left-color: var(--muted); }
 .coach-message--new  { border-left-color: var(--muted); }
+.history-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.history-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.history-notes { margin-top: 0.2rem; font-size: 0.88rem; }
+.link-btn { background: transparent; color: var(--muted); border: 0; padding: 0.1rem 0.2rem; cursor: pointer; font-size: 0.85rem; }
+.link-btn:hover { color: var(--fg); text-decoration: underline; }
+.link-btn--danger:hover { color: #f5b041; }
+.history-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.history-edit input { padding: 0.25rem 0.4rem; background: #0b0e12; color: var(--fg); border: 1px solid var(--border); border-radius: 3px; font: inherit; }

@@ -107,22 +107,97 @@ async function loadHistory() {
     return;
   }
   for (const w of workouts) {
-    const li = document.createElement('li');
-    const head = document.createElement('div');
-    head.innerHTML = '<strong>' + w.date + '</strong> · ' + w.theme + ' · '
-      + w.completedMinutes + '/' + w.plannedMinutes + ' min';
-    li.appendChild(head);
-    if (w.notes) {
-      const notes = document.createElement('div');
-      notes.className = 'muted';
-      notes.textContent = w.notes;
-      li.appendChild(notes);
-    }
-    historyList.appendChild(li);
+    historyList.appendChild(renderHistoryItem(w));
   }
   historyLoading.hidden = true;
   historyEmpty.hidden = true;
   historyList.hidden = false;
+}
+
+function renderHistoryItem(w) {
+  const li = document.createElement('li');
+  li.dataset.id = w.id;
+  li.dataset.testid = 'pt-row-workout';
+
+  const head = document.createElement('div');
+  head.className = 'history-head';
+  const summary = document.createElement('span');
+  summary.innerHTML = '<strong>' + w.date + '</strong> · ' + w.theme + ' · '
+    + '<span class="completed-min">' + w.completedMinutes + '</span>/' + w.plannedMinutes + ' min';
+  const actions = document.createElement('span');
+  actions.className = 'history-actions';
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'link-btn';
+  editBtn.dataset.testid = 'pt-button-edit';
+  editBtn.textContent = 'Edit';
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'link-btn link-btn--danger';
+  delBtn.dataset.testid = 'pt-button-delete';
+  delBtn.textContent = 'Delete';
+  actions.appendChild(editBtn);
+  actions.appendChild(delBtn);
+  head.appendChild(summary);
+  head.appendChild(actions);
+  li.appendChild(head);
+
+  if (w.notes) {
+    const notes = document.createElement('div');
+    notes.className = 'muted history-notes';
+    notes.textContent = w.notes;
+    li.appendChild(notes);
+  }
+
+  editBtn.addEventListener('click', () => beginEditHistoryItem(li, w));
+  delBtn.addEventListener('click', async () => {
+    if (!confirm(`Delete workout from ${w.date}?`)) return;
+    const r = await fetch('/api/me/workouts/' + w.id, { method: 'DELETE' });
+    if (!r.ok) { alert('Delete failed'); return; }
+    await loadHistory();
+    await loadSummary();
+  });
+
+  return li;
+}
+
+function beginEditHistoryItem(li, w) {
+  // Replace the head with an inline edit form
+  li.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'history-edit';
+  form.dataset.testid = 'pt-form-edit';
+  form.innerHTML =
+    '<strong>' + w.date + '</strong> · ' + w.theme + ' · ' +
+    '<input type="number" name="completedMinutes" min="0" max="1000" required style="width:5em" />' +
+    ' / ' + w.plannedMinutes + ' min' +
+    ' <input type="text" name="notes" maxlength="500" placeholder="notes" style="width:14em" />' +
+    ' <button type="submit" class="link-btn">Save</button>' +
+    ' <button type="button" class="link-btn link-btn--danger" data-cancel>Cancel</button>';
+  form.elements['completedMinutes'].value = w.completedMinutes;
+  form.elements['notes'].value = w.notes || '';
+  li.appendChild(form);
+
+  form.querySelector('[data-cancel]').addEventListener('click', () => { loadHistory(); });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      completedMinutes: parseInt(form.elements['completedMinutes'].value, 10),
+      notes: form.elements['notes'].value || null,
+    };
+    const r = await fetch('/api/me/workouts/' + w.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ error: 'failed' }));
+      alert('Save failed: ' + (err.error || 'unknown'));
+      return;
+    }
+    await loadHistory();
+    await loadSummary();
+  });
 }
 
 async function loadSummary() {
