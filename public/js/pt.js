@@ -47,6 +47,23 @@ async function loadProfile() {
   form.elements['goal'].value = p.goal;
   form.elements['fitnessLevel'].value = p.fitnessLevel;
   form.elements['weeklyMinutes'].value = p.weeklyMinutes;
+  form.elements['timezone'].value = p.timezone || 'UTC';
+
+  // On first load only, if the profile is still on UTC and the browser knows a
+  // real zone, push it once so the user doesn't have to figure out the field.
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (browserTz && browserTz !== 'UTC' && (p.timezone === 'UTC' || !p.timezone)) {
+    const r2 = await fetch('/api/me/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: browserTz }),
+    });
+    if (r2.ok) {
+      const p2 = await r2.json();
+      form.elements['timezone'].value = p2.timezone;
+      return p2;
+    }
+  }
   return p;
 }
 
@@ -256,6 +273,7 @@ form.addEventListener('submit', async (e) => {
     goal: form.elements['goal'].value,
     fitnessLevel: form.elements['fitnessLevel'].value,
     weeklyMinutes: parseInt(form.elements['weeklyMinutes'].value, 10) || 0,
+    timezone: form.elements['timezone'].value.trim() || 'UTC',
   };
   const r = await fetch('/api/me/profile', {
     method: 'PUT',

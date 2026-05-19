@@ -36,6 +36,8 @@ const MIGRATIONS: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS pt_workout_user_date_idx
       ON pt_workout (username, workout_date DESC)`,
+  `ALTER TABLE pt_user
+       ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC'`,
 ];
 
 export async function migrate(): Promise<void> {
@@ -52,8 +54,22 @@ export interface ProfileRow {
   goal: string;
   fitness_level: string;
   weekly_minutes: number;
+  timezone: string;
   created_at: Date;
   updated_at: Date;
+}
+
+/**
+ * IANA timezone validation — Node's Intl throws RangeError for unknown zones.
+ * We accept what Node accepts; anything else is rejected as 400 by the API.
+ */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface WorkoutRow {

@@ -1,4 +1,5 @@
 import type { ProfileRow, WorkoutRow } from './db.js';
+import { startOfWeekDate, todayAndYesterday } from './tz.js';
 
 export type Trend = 'up' | 'down' | 'flat' | 'new';
 
@@ -18,44 +19,36 @@ export interface WeekSummary {
   weekCoachMessage: string;
 }
 
-/** Monday of the week containing `now`, in local clock terms (00:00 UTC anchor). */
-function startOfWeek(now: Date): Date {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const dow = d.getUTCDay(); // 0=Sun..6=Sat
-  const offset = (dow + 6) % 7; // days since Monday
-  d.setUTCDate(d.getUTCDate() - offset);
-  return d;
-}
-
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 function rowDate(row: WorkoutRow): string {
   return row.workout_date instanceof Date
-    ? toISODate(row.workout_date)
+    ? // pg's Date for DATE columns is at UTC midnight; slice the ISO is correct
+      row.workout_date.toISOString().slice(0, 10)
     : String(row.workout_date).slice(0, 10);
 }
 
-function computeStreak(sorted: WorkoutRow[], today: Date): number {
+function previousIsoDate(iso: string): string {
+  // pure string arithmetic on YYYY-MM-DD via Date constructor (UTC) to avoid TZ creep
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function computeStreak(sorted: WorkoutRow[], now: Date, tz: string): number {
   if (sorted.length === 0) return 0;
-  const todayIso = toISODate(today);
-  const yesterday = new Date(today);
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const yesterdayIso = toISODate(yesterday);
+  const { today, yesterday } = todayAndYesterday(now, tz);
 
   const dates = new Set<string>();
   for (const r of sorted) dates.add(rowDate(r));
 
-  let cursor: Date;
-  if (dates.has(todayIso)) cursor = new Date(today);
-  else if (dates.has(yesterdayIso)) cursor = new Date(yesterday);
+  let cursorIso: string | null = null;
+  if (dates.has(today)) cursorIso = today;
+  else if (dates.has(yesterday)) cursorIso = yesterday;
   else return 0;
 
   let streak = 0;
-  while (dates.has(toISODate(cursor))) {
+  while (cursorIso && dates.has(cursorIso)) {
     streak += 1;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
+    cursorIso = previousIsoDate(cursorIso);
   }
   return streak;
 }
@@ -90,13 +83,11 @@ export function computeSummary(
   workouts: WorkoutRow[],
   now: Date = new Date(),
 ): WeekSummary {
-  const weekStart = startOfWeek(now);
-  const weekStartIso = toISODate(weekStart);
-
-  // Previous week boundaries (Monday..Sunday of the prior week).
-  const prevWeekStart = new Date(weekStart);
-  prevWeekStart.setUTCDate(prevWeekStart.getUTCDate() - 7);
-  const prevWeekStartIso = toISODate(prevWeekStart);
+  const tz = profile.timezone || 'UTC';
+  const weekStartIso = startOfWeekDate(now, tz);
+  // Previous week boundary = 7 days before this Monday.
+  let prevWeekStartIso = weekStartIso;
+  for (let i = 0; i < 7; i++) prevWeekStartIso = previousIsoDate(prevWeekStartIso);
 
   const inThisWeek = workouts.filter((w) => rowDate(w) >= weekStartIso);
   const inLastWeek = workouts.filter((w) => {
@@ -116,8 +107,10 @@ export function computeSummary(
   const percent = Math.min(999, Math.round((thisWeekMinutes / target) * 100));
 
   const sortedDesc = [...workouts].sort((a, b) => rowDate(b).localeCompare(rowDate(a)));
-  const streak = computeStreak(sortedDesc, now);
+  const streak = computeStreak(sortedDesc, now, tz);
   const last = sortedDesc[0];
+
+
 
   let trend: Trend;
   if (inLastWeek.length === 0 && inThisWeek.length === 0) {

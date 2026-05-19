@@ -3,9 +3,10 @@ import pino from 'pino';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow, type WorkoutRow } from './db.js';
+import { pool, migrate, VALID_GOALS, VALID_LEVELS, isValidTimezone, type ProfileRow, type WorkoutRow } from './db.js';
 import { deriveSession, wasRestDay, type RecentContext } from './session.js';
 import { computeSummary } from './summary.js';
+import { calendarDate, todayAndYesterday } from './tz.js';
 
 const logger = pino({ name: 'pt' });
 
@@ -153,6 +154,7 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
   const goal = typeof body['goal'] === 'string' ? body['goal'] : undefined;
   const level = typeof body['fitnessLevel'] === 'string' ? body['fitnessLevel'] : undefined;
   const weekly = typeof body['weeklyMinutes'] === 'number' ? body['weeklyMinutes'] : undefined;
+  const timezone = typeof body['timezone'] === 'string' ? body['timezone'] : undefined;
 
   if (goal !== undefined && !VALID_GOALS.has(goal)) {
     res.status(400).json({ error: `goal must be one of: ${Array.from(VALID_GOALS).join(', ')}` });
@@ -166,6 +168,10 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'weeklyMinutes must be an integer between 0 and 1500' });
     return;
   }
+  if (timezone !== undefined && !isValidTimezone(timezone)) {
+    res.status(400).json({ error: 'timezone must be a valid IANA timezone (e.g. America/Los_Angeles)' });
+    return;
+  }
 
   try {
     await getOrCreateProfile(user); // ensure exists
@@ -174,10 +180,11 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
           SET goal           = COALESCE($2, goal),
               fitness_level  = COALESCE($3, fitness_level),
               weekly_minutes = COALESCE($4, weekly_minutes),
+              timezone       = COALESCE($5, timezone),
               updated_at     = now()
         WHERE username = $1
       RETURNING *`,
-      [user.username, goal ?? null, level ?? null, weekly ?? null],
+      [user.username, goal ?? null, level ?? null, weekly ?? null, timezone ?? null],
     );
     res.json(profileToJson(upd.rows[0]!));
   } catch (err) {
@@ -293,7 +300,11 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
 
-  const dateInput = typeof body['date'] === 'string' ? body['date'] : new Date().toISOString().slice(0, 10);
+  // Profile is needed both to validate date defaulting (user's tz) and to derive theme below.
+  const profile = await getOrCreateProfile(user);
+  const dateInput = typeof body['date'] === 'string'
+    ? body['date']
+    : calendarDate(new Date(), profile.timezone || 'UTC');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
     res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     return;
@@ -306,7 +317,7 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
   const notes = typeof body['notes'] === 'string' && body['notes'].length <= 500 ? body['notes'] : null;
 
   try {
-    const profile = await getOrCreateProfile(user);
+    // Profile already loaded above.
     // Derive theme/planned from the profile-driven session for the requested date,
     // not from client input — we don't want clients fabricating arbitrary themes.
     // Use today's recent-context so the planned-minutes recorded match the adapted
@@ -385,7 +396,8 @@ function workoutToJson(row: WorkoutRow): Record<string, unknown> {
   };
 }
 
-async function loadRecentContext(username: string, profile: ProfileRow, today: Date): Promise<RecentContext> {
+async function loadRecentContext(username: string, profile: ProfileRow, now: Date): Promise<RecentContext> {
+  const tz = profile.timezone || 'UTC';
   const result = await pool.query<WorkoutRow>(
     `SELECT * FROM pt_workout
       WHERE username = $1
@@ -394,37 +406,35 @@ async function loadRecentContext(username: string, profile: ProfileRow, today: D
     [username],
   );
   const rows = result.rows;
-  const yesterday = new Date(today);
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const ymd = (d: Date) => d.toISOString().slice(0, 10);
-  const yesterdayIso = ymd(yesterday);
-  const yWorkout = rows.find((r) => {
-    const d = r.workout_date instanceof Date ? ymd(r.workout_date) : String(r.workout_date).slice(0, 10);
-    return d === yesterdayIso;
-  });
+  const { today: todayIso, yesterday: yesterdayIso } = todayAndYesterday(now, tz);
+  const rowIso = (r: WorkoutRow) =>
+    r.workout_date instanceof Date ? r.workout_date.toISOString().slice(0, 10) : String(r.workout_date).slice(0, 10);
+  const yWorkout = rows.find((r) => rowIso(r) === yesterdayIso);
 
   let yesterdayComplianceRatio: number | null = null;
   if (yWorkout && yWorkout.planned_minutes > 0) {
     yesterdayComplianceRatio = yWorkout.completed_minutes / yWorkout.planned_minutes;
   }
 
-  // Streak: walk back from today (or yesterday if today not logged) over consecutive logged days.
-  const loggedDates = new Set<string>(rows.map((r) =>
-    r.workout_date instanceof Date ? ymd(r.workout_date) : String(r.workout_date).slice(0, 10),
-  ));
-  let cursor: Date | null = null;
-  if (loggedDates.has(ymd(today))) cursor = new Date(today);
-  else if (loggedDates.has(yesterdayIso)) cursor = new Date(yesterday);
+  const loggedDates = new Set<string>(rows.map(rowIso));
+  let cursorIso: string | null = null;
+  if (loggedDates.has(todayIso)) cursorIso = todayIso;
+  else if (loggedDates.has(yesterdayIso)) cursorIso = yesterdayIso;
   let streakDays = 0;
-  while (cursor && loggedDates.has(ymd(cursor))) {
+  while (cursorIso && loggedDates.has(cursorIso)) {
     streakDays += 1;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
+    const prev = new Date(cursorIso + 'T00:00:00Z');
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    cursorIso = prev.toISOString().slice(0, 10);
   }
 
+  // For yesterdayWasRest, we want "was yesterday's calendar day a rest day in this tz?"
+  // Build an Instant at yesterday-noon-UTC and let session.ts use the profile tz.
+  const yesterdayAt = new Date(yesterdayIso + 'T12:00:00Z');
   return {
     yesterdayComplianceRatio,
     streakDays,
-    yesterdayWasRest: wasRestDay(profile, yesterday),
+    yesterdayWasRest: wasRestDay(profile, yesterdayAt),
   };
 }
 
@@ -436,6 +446,7 @@ function profileToJson(row: ProfileRow): Record<string, unknown> {
     goal: row.goal,
     fitnessLevel: row.fitness_level,
     weeklyMinutes: row.weekly_minutes,
+    timezone: row.timezone,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };

@@ -1,5 +1,6 @@
 import type { ProfileRow } from './db.js';
 import { prescriptionsFor, type ExercisePrescription } from './exercises.js';
+import { calendarDate, calendarDayOfWeek } from './tz.js';
 
 export interface SessionBlock {
   name: string;
@@ -19,11 +20,8 @@ export interface TodaySession {
 }
 
 export interface RecentContext {
-  /** completed/planned ratio for yesterday's logged workout, or null if no workout yesterday */
   yesterdayComplianceRatio: number | null;
-  /** current consecutive-day streak (including today if logged) */
   streakDays: number;
-  /** true if yesterday was a planned rest day (so missing it isn't a miss) */
   yesterdayWasRest: boolean;
 }
 
@@ -53,27 +51,21 @@ function pickAdaptation(ctx: RecentContext, theme: string): Adaptation {
   if (theme === 'Rest') {
     return { factor: 1, kind: 'baseline', note: 'Rest day — protect tomorrow by actually resting today.' };
   }
-
   if (ctx.yesterdayComplianceRatio === null && !ctx.yesterdayWasRest) {
     if (ctx.streakDays === 0) {
       return { factor: 0.9, kind: 'recovery', note: "First session back — keep it doable so you stack a second tomorrow." };
     }
-    // Streak alive but no workout yesterday (anchored on today) — just keep going.
     return { factor: 1, kind: 'baseline', note: `Streak of ${ctx.streakDays} day(s). Ride it.` };
   }
-
   if (ctx.yesterdayComplianceRatio !== null && ctx.yesterdayComplianceRatio < 0.5) {
     return { factor: 0.8, kind: 'recovery', note: "Yesterday came up short — easing today so you finish it." };
   }
-
   if (ctx.yesterdayComplianceRatio !== null && ctx.yesterdayComplianceRatio >= 1.0 && ctx.streakDays >= 3) {
     return { factor: 1.1, kind: 'progression', note: `Streak of ${ctx.streakDays} and you closed yesterday — small bump today.` };
   }
-
   if (ctx.streakDays >= 5) {
     return { factor: 1, kind: 'baseline', note: `Five-plus day streak — keep the form clean.` };
   }
-
   return { factor: 1, kind: 'baseline', note: 'Steady session. Show up, finish strong.' };
 }
 
@@ -82,7 +74,8 @@ export function deriveSession(
   now: Date = new Date(),
   ctx: RecentContext = { yesterdayComplianceRatio: null, streakDays: 0, yesterdayWasRest: false },
 ): TodaySession {
-  const dow = now.getDay();
+  const tz = profile.timezone || 'UTC';
+  const dow = calendarDayOfWeek(now, tz);
   const themes = THEMES[profile.goal] ?? THEMES['general_fitness']!;
   const theme = themes[dow] ?? 'Active recovery';
   const factor = LEVEL_FACTOR[profile.fitness_level] ?? 1.0;
@@ -115,7 +108,7 @@ export function deriveSession(
   }
 
   return {
-    date: now.toISOString().slice(0, 10),
+    date: calendarDate(now, tz),
     dayOfWeek: DAYS[dow] ?? 'Today',
     theme,
     totalMinutes: blocks.reduce((s, b) => s + b.durationMinutes, 0),
@@ -125,8 +118,8 @@ export function deriveSession(
   };
 }
 
-/** Was the planned theme for that day a rest day for this profile? */
-export function wasRestDay(profile: ProfileRow, date: Date): boolean {
+/** Was the planned theme on the given calendar date a rest day for this profile? */
+export function wasRestDay(profile: ProfileRow, at: Date): boolean {
   const themes = THEMES[profile.goal] ?? THEMES['general_fitness']!;
-  return (themes[date.getUTCDay()] ?? '') === 'Rest';
+  return (themes[calendarDayOfWeek(at, profile.timezone || 'UTC')] ?? '') === 'Rest';
 }
