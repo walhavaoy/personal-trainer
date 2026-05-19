@@ -292,6 +292,40 @@ app.delete('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Res
   }
 });
 
+app.post('/api/me/today/rest', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    const tz = profile.timezone || 'UTC';
+    const todayIso = calendarDate(new Date(), tz);
+    // Refuse if today already has any entry — clients should DELETE first if they want to overwrite.
+    const existing = await pool.query(
+      `SELECT 1 FROM pt_workout WHERE username = $1 AND workout_date = $2 LIMIT 1`,
+      [user.username, todayIso],
+    );
+    if (existing.rowCount && existing.rowCount > 0) {
+      res.status(409).json({ error: 'Today already has a logged entry; delete it first to set rest' });
+      return;
+    }
+    const result = await pool.query<WorkoutRow>(
+      `INSERT INTO pt_workout
+            (username, workout_date, theme, planned_minutes, completed_minutes, notes)
+       VALUES ($1, $2, 'Rest', 0, 0, $3)
+       RETURNING *`,
+      [user.username, todayIso, (req.body && typeof req.body.notes === 'string') ? req.body.notes.slice(0, 500) : null],
+    );
+    logger.info({ username: user.username, date: todayIso }, 'Manual rest day');
+    res.status(201).json(workoutToJson(result.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to record rest day');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/me/workouts', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

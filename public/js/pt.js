@@ -11,6 +11,8 @@ const form = document.getElementById('profile-form');
 const profileStatus = document.getElementById('profile-status');
 const logForm = document.getElementById('log-form');
 const logStatus = document.getElementById('log-status');
+const logDone = document.getElementById('log-done');
+const restButton = document.getElementById('rest-button');
 const historyLoading = document.getElementById('history-loading');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
@@ -118,6 +120,7 @@ async function loadHistory() {
   }
   const workouts = await r.json();
   historyList.innerHTML = '';
+  reflectTodayLogged(workouts);
   if (workouts.length === 0) {
     historyLoading.hidden = true;
     historyEmpty.hidden = false;
@@ -130,6 +133,24 @@ async function loadHistory() {
   historyLoading.hidden = true;
   historyEmpty.hidden = true;
   historyList.hidden = false;
+}
+
+function reflectTodayLogged(workouts) {
+  // Date the user is *currently looking at* — pulled from the loaded session.
+  const today = logForm.dataset.date;
+  if (!today) return;
+  const t = workouts.find((w) => w.date === today);
+  if (t) {
+    logForm.hidden = true;
+    logDone.hidden = false;
+    const label = t.theme === 'Rest'
+      ? `Rest day taken — nothing logged today.`
+      : `Logged today: ${t.completedMinutes}/${t.plannedMinutes} min · ${t.theme}`;
+    logDone.textContent = label;
+  } else {
+    logForm.hidden = false;
+    logDone.hidden = true;
+  }
 }
 
 function renderHistoryItem(w) {
@@ -272,6 +293,19 @@ async function loadSummary() {
 
   summaryEl.hidden = false;
 }
+
+restButton.addEventListener('click', async () => {
+  if (!confirm('Take today as a rest day?')) return;
+  const r = await fetch('/api/me/today/rest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: 'failed' }));
+    logStatus.textContent = 'Error: ' + (err.error || 'failed');
+    return;
+  }
+  logStatus.textContent = '';
+  await loadHistory();
+  await loadSummary();
+});
 
 logForm.addEventListener('submit', async (e) => {
   e.preventDefault();
