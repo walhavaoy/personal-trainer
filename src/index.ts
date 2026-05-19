@@ -570,7 +570,37 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
     const profile = await getOrCreateProfile(user);
     const now = new Date();
     const ctx = await loadRecentContext(user.username, profile, now);
-    res.json(deriveSession(profile, now, ctx));
+    const session = deriveSession(profile, now, ctx);
+    const tz = profile.timezone || 'UTC';
+    const todayIso = calendarDate(now, tz);
+
+    // Find the most recent workout with the same theme that isn't today.
+    // Rest themes don't have a meaningful "last session" — skip the lookup.
+    let previousSession: { date: string; completedMinutes: number; plannedMinutes: number } | null = null;
+    if (session.theme !== 'Rest') {
+      const prev = await pool.query<WorkoutRow>(
+        `SELECT * FROM pt_workout
+          WHERE username = $1
+            AND theme = $2
+            AND workout_date < $3::date
+          ORDER BY workout_date DESC
+          LIMIT 1`,
+        [user.username, session.theme, todayIso],
+      );
+      if (prev.rows.length > 0) {
+        const row = prev.rows[0]!;
+        const d = row.workout_date instanceof Date
+          ? row.workout_date.toISOString().slice(0, 10)
+          : String(row.workout_date).slice(0, 10);
+        previousSession = {
+          date: d,
+          completedMinutes: row.completed_minutes,
+          plannedMinutes: row.planned_minutes,
+        };
+      }
+    }
+
+    res.json({ ...session, previousSession });
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to derive session');
     res.status(500).json({ error: 'Internal server error' });

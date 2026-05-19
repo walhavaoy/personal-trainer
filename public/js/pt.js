@@ -7,6 +7,7 @@ const sessionTheme = document.getElementById('session-theme');
 const sessionTotal = document.getElementById('session-total');
 const sessionBlocks = document.getElementById('session-blocks');
 const trainerNote = document.getElementById('trainer-note');
+const previousSessionEl = document.getElementById('previous-session');
 const form = document.getElementById('profile-form');
 const profileStatus = document.getElementById('profile-status');
 const logForm = document.getElementById('log-form');
@@ -100,6 +101,15 @@ async function loadToday() {
   sessionTotal.textContent = s.totalMinutes;
   trainerNote.textContent = s.trainerNote || '';
   trainerNote.className = 'trainer-note trainer-note--' + (s.adaptation || 'baseline');
+  if (s.previousSession) {
+    const p = s.previousSession;
+    previousSessionEl.textContent = `Last ${s.theme}: ${p.completedMinutes}/${p.plannedMinutes} min · ${relativeDate(p.date)}`;
+    previousSessionEl.title = p.date;
+    previousSessionEl.hidden = false;
+  } else {
+    previousSessionEl.hidden = true;
+    previousSessionEl.textContent = '';
+  }
   sessionBlocks.innerHTML = '';
   for (const b of s.blocks) {
     const li = document.createElement('li');
