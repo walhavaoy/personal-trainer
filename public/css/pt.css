@@ -58,3 +58,12 @@ form button:hover { filter: brightness(1.1); }
 #history-list { list-style: none; padding: 0; margin: 0; }
 #history-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 #history-list li:last-child { border-bottom: 0; }
+#summary { margin-top: 1rem; }
+.summary-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; padding: 0.25rem 0; }
+.summary-label { color: var(--muted); }
+.summary-value { color: var(--fg); }
+.progress { background: #0b0e12; border: 1px solid var(--border); border-radius: 999px; height: 8px; overflow: hidden; margin: 0.4rem 0 0.6rem; }
+.progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width 200ms ease; }
+.progress-bar--full { background: #f5b041; }
+.chip { display: inline-block; padding: 0.1rem 0.55rem; background: #0b0e12; border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; color: var(--muted); }
+.chip--active { color: var(--accent); border-color: var(--accent); }

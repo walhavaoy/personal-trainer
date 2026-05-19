@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow, type WorkoutRow } from './db.js';
 import { deriveSession } from './session.js';
+import { computeSummary } from './summary.js';
 
 const logger = pino({ name: 'pt' });
 
@@ -244,6 +245,29 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
     res.status(201).json(workoutToJson(result.rows[0]!));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to log workout');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/me/summary', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    // 60 days is enough to compute current streak even with sparse training.
+    const workouts = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+        WHERE username = $1
+          AND workout_date >= CURRENT_DATE - INTERVAL '60 days'
+        ORDER BY workout_date DESC`,
+      [user.username],
+    );
+    res.json(computeSummary(profile, workouts.rows));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to compute summary');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

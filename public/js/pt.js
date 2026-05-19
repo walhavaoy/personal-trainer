@@ -13,6 +13,13 @@ const logStatus = document.getElementById('log-status');
 const historyLoading = document.getElementById('history-loading');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
+const summaryEl = document.getElementById('summary');
+const summaryMinutes = document.getElementById('summary-minutes');
+const summaryTarget = document.getElementById('summary-target');
+const summarySessions = document.getElementById('summary-sessions');
+const summaryBar = document.getElementById('summary-bar');
+const summaryStreak = document.getElementById('summary-streak');
+const summaryLast = document.getElementById('summary-last');
 
 async function loadMe() {
   const r = await fetch('/api/me');
@@ -99,6 +106,22 @@ async function loadHistory() {
   historyList.hidden = false;
 }
 
+async function loadSummary() {
+  const r = await fetch('/api/me/summary');
+  if (!r.ok) return;
+  const s = await r.json();
+  summaryMinutes.textContent = s.thisWeekMinutes;
+  summaryTarget.textContent = s.weeklyTargetMinutes;
+  summarySessions.textContent = s.thisWeekSessions;
+  const pct = Math.min(100, s.percentOfTarget);
+  summaryBar.style.width = pct + '%';
+  summaryBar.classList.toggle('progress-bar--full', s.percentOfTarget >= 100);
+  summaryStreak.textContent = s.streakDays + (s.streakDays === 1 ? ' day' : ' days');
+  summaryStreak.classList.toggle('chip--active', s.streakDays > 0);
+  summaryLast.textContent = s.lastWorkoutDate ? '· last on ' + s.lastWorkoutDate : '';
+  summaryEl.hidden = false;
+}
+
 logForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   logStatus.textContent = 'Saving…';
@@ -120,6 +143,7 @@ logForm.addEventListener('submit', async (e) => {
   logStatus.textContent = 'Logged.';
   logForm.elements['notes'].value = '';
   await loadHistory();
+  await loadSummary();
 });
 
 form.addEventListener('submit', async (e) => {
@@ -142,6 +166,7 @@ form.addEventListener('submit', async (e) => {
   }
   profileStatus.textContent = 'Saved.';
   await loadToday();
+  await loadSummary();
 });
 
 (async () => {
@@ -150,4 +175,5 @@ form.addEventListener('submit', async (e) => {
   await loadProfile();
   await loadToday();
   await loadHistory();
+  await loadSummary();
 })();

@@ -14,6 +14,23 @@
     <main>
       <section id="welcome">
         <h2>Welcome, <span id="firstName">athlete</span>.</h2>
+        <div id="summary" data-testid="pt-card-summary" hidden>
+          <div class="summary-row">
+            <span class="summary-label">This week</span>
+            <span class="summary-value">
+              <strong id="summary-minutes">0</strong> / <span id="summary-target">0</span> min
+              · <span id="summary-sessions">0</span> session(s)
+            </span>
+          </div>
+          <div class="progress"><div id="summary-bar" class="progress-bar"></div></div>
+          <div class="summary-row">
+            <span class="summary-label">Streak</span>
+            <span class="summary-value">
+              <span id="summary-streak" class="chip">0 day(s)</span>
+              <span id="summary-last" class="muted"></span>
+            </span>
+          </div>
+        </div>
       </section>
 
       <section id="today">
