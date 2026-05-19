@@ -24,6 +24,18 @@ const MIGRATIONS: string[] = [
       created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  `CREATE TABLE IF NOT EXISTS pt_workout (
+      id                BIGSERIAL PRIMARY KEY,
+      username          TEXT NOT NULL REFERENCES pt_user(username) ON DELETE CASCADE,
+      workout_date      DATE NOT NULL,
+      theme             TEXT NOT NULL,
+      planned_minutes   INTEGER NOT NULL,
+      completed_minutes INTEGER NOT NULL,
+      notes             TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS pt_workout_user_date_idx
+      ON pt_workout (username, workout_date DESC)`,
 ];
 
 export async function migrate(): Promise<void> {
@@ -42,6 +54,17 @@ export interface ProfileRow {
   weekly_minutes: number;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface WorkoutRow {
+  id: string;
+  username: string;
+  workout_date: Date | string;
+  theme: string;
+  planned_minutes: number;
+  completed_minutes: number;
+  notes: string | null;
+  created_at: Date;
 }
 
 export const VALID_GOALS = new Set([

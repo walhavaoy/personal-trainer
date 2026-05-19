@@ -8,6 +8,11 @@ const sessionTotal = document.getElementById('session-total');
 const sessionBlocks = document.getElementById('session-blocks');
 const form = document.getElementById('profile-form');
 const profileStatus = document.getElementById('profile-status');
+const logForm = document.getElementById('log-form');
+const logStatus = document.getElementById('log-status');
+const historyLoading = document.getElementById('history-loading');
+const historyList = document.getElementById('history-list');
+const historyEmpty = document.getElementById('history-empty');
 
 async function loadMe() {
   const r = await fetch('/api/me');
@@ -56,7 +61,66 @@ async function loadToday() {
   }
   sessionLoading.hidden = true;
   sessionEl.hidden = false;
+  // Pre-fill the completed-minutes input with the planned total (user can edit before logging).
+  logForm.elements['completedMinutes'].value = s.totalMinutes;
+  logForm.dataset.date = s.date;
 }
+
+async function loadHistory() {
+  const r = await fetch('/api/me/workouts');
+  if (!r.ok) {
+    historyLoading.textContent = 'Could not load history.';
+    return;
+  }
+  const workouts = await r.json();
+  historyList.innerHTML = '';
+  if (workouts.length === 0) {
+    historyLoading.hidden = true;
+    historyEmpty.hidden = false;
+    historyList.hidden = true;
+    return;
+  }
+  for (const w of workouts) {
+    const li = document.createElement('li');
+    const head = document.createElement('div');
+    head.innerHTML = '<strong>' + w.date + '</strong> · ' + w.theme + ' · '
+      + w.completedMinutes + '/' + w.plannedMinutes + ' min';
+    li.appendChild(head);
+    if (w.notes) {
+      const notes = document.createElement('div');
+      notes.className = 'muted';
+      notes.textContent = w.notes;
+      li.appendChild(notes);
+    }
+    historyList.appendChild(li);
+  }
+  historyLoading.hidden = true;
+  historyEmpty.hidden = true;
+  historyList.hidden = false;
+}
+
+logForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  logStatus.textContent = 'Saving…';
+  const payload = {
+    date: logForm.dataset.date,
+    completedMinutes: parseInt(logForm.elements['completedMinutes'].value, 10) || 0,
+    notes: logForm.elements['notes'].value || undefined,
+  };
+  const r = await fetch('/api/me/workouts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: 'failed' }));
+    logStatus.textContent = 'Error: ' + (err.error || 'failed');
+    return;
+  }
+  logStatus.textContent = 'Logged.';
+  logForm.elements['notes'].value = '';
+  await loadHistory();
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -85,4 +149,5 @@ form.addEventListener('submit', async (e) => {
   if (!me) return;
   await loadProfile();
   await loadToday();
+  await loadHistory();
 })();

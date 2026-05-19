@@ -24,7 +24,26 @@
             <span id="session-day"></span> · <span id="session-theme"></span> · <span id="session-total"></span> min
           </div>
           <ol id="session-blocks"></ol>
+          <form id="log-form" data-testid="pt-form-log">
+            <label>
+              Minutes completed
+              <input type="number" name="completedMinutes" min="0" max="1000" step="1" data-testid="pt-input-completed" />
+            </label>
+            <label>
+              Notes (optional)
+              <input type="text" name="notes" maxlength="500" data-testid="pt-input-notes" placeholder="How did it feel?" />
+            </label>
+            <button type="submit" data-testid="pt-button-log">Mark done</button>
+            <span id="log-status" class="muted"></span>
+          </form>
         </div>
+      </section>
+
+      <section id="history">
+        <h3>Recent workouts</h3>
+        <div id="history-loading" class="placeholder">Loading…</div>
+        <ul id="history-list" data-testid="pt-list-history" hidden></ul>
+        <p id="history-empty" class="muted" hidden>No workouts logged yet. Complete today's session to start your history.</p>
       </section>
 
       <section id="profile">

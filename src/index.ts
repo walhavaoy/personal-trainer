@@ -3,7 +3,7 @@ import pino from 'pino';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow } from './db.js';
+import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow, type WorkoutRow } from './db.js';
 import { deriveSession } from './session.js';
 
 const logger = pino({ name: 'pt' });
@@ -185,6 +185,69 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/me/workouts', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const result = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+        WHERE username = $1
+        ORDER BY workout_date DESC, id DESC
+        LIMIT 30`,
+      [user.username],
+    );
+    res.json(result.rows.map(workoutToJson));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to list workouts');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/me/workouts', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const dateInput = typeof body['date'] === 'string' ? body['date'] : new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  const completed = body['completedMinutes'];
+  if (typeof completed !== 'number' || !Number.isInteger(completed) || completed < 0 || completed > 1000) {
+    res.status(400).json({ error: 'completedMinutes must be an integer between 0 and 1000' });
+    return;
+  }
+  const notes = typeof body['notes'] === 'string' && body['notes'].length <= 500 ? body['notes'] : null;
+
+  try {
+    const profile = await getOrCreateProfile(user);
+    // Derive theme/planned from the profile-driven session for the requested date,
+    // not from client input — we don't want clients fabricating arbitrary themes.
+    const session = deriveSession(profile, new Date(`${dateInput}T12:00:00Z`));
+    const themeInput = typeof body['theme'] === 'string' ? body['theme'] : session.theme;
+
+    const result = await pool.query<WorkoutRow>(
+      `INSERT INTO pt_workout
+            (username, workout_date, theme, planned_minutes, completed_minutes, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [user.username, dateInput, themeInput, session.totalMinutes, completed, notes],
+    );
+    logger.info({ username: user.username, date: dateInput, completed }, 'Workout logged');
+    res.status(201).json(workoutToJson(result.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to log workout');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/me/today', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {
@@ -199,6 +262,20 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+function workoutToJson(row: WorkoutRow): Record<string, unknown> {
+  const wd = row.workout_date;
+  return {
+    id: typeof row.id === 'string' ? row.id : String(row.id),
+    username: row.username,
+    date: wd instanceof Date ? wd.toISOString().slice(0, 10) : String(wd).slice(0, 10),
+    theme: row.theme,
+    plannedMinutes: row.planned_minutes,
+    completedMinutes: row.completed_minutes,
+    notes: row.notes,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  };
+}
 
 function profileToJson(row: ProfileRow): Record<string, unknown> {
   return {

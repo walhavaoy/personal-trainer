@@ -53,4 +53,8 @@ form button {
   cursor: pointer;
 }
 form button:hover { filter: brightness(1.1); }
-#profile-status { margin-left: 0.75rem; font-size: 0.85rem; }
+#profile-status, #log-status { margin-left: 0.75rem; font-size: 0.85rem; }
+#log-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+#history-list { list-style: none; padding: 0; margin: 0; }
+#history-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+#history-list li:last-child { border-bottom: 0; }
