@@ -239,6 +239,41 @@ function beginEditHistoryItem(li, w) {
   });
 }
 
+async function loadTrend() {
+  const r = await fetch('/api/me/trend?weeks=8');
+  if (!r.ok) return;
+  const weeks = await r.json();
+  const svg = document.getElementById('summary-trend-svg');
+  svg.innerHTML = '';
+  if (weeks.length === 0) return;
+
+  const W = 160, H = 40, GAP = 2;
+  const colW = (W - GAP * (weeks.length - 1)) / weeks.length;
+  // Cap the bar height at 200% of target so a single huge week doesn't squash the rest.
+  const maxRatio = Math.max(1, ...weeks.map((w) => Math.min(2, w.percentOfTarget / 100)));
+  const NS = 'http://www.w3.org/2000/svg';
+  weeks.forEach((w, i) => {
+    const ratio = Math.min(2, w.percentOfTarget / 100);
+    const h = Math.max(2, Math.round((ratio / maxRatio) * (H - 2)));
+    const x = Math.round(i * (colW + GAP));
+    const y = H - h;
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('x', String(x));
+    rect.setAttribute('y', String(y));
+    rect.setAttribute('width', String(Math.max(1, Math.round(colW))));
+    rect.setAttribute('height', String(h));
+    rect.setAttribute('rx', '1');
+    let fill = '#3a4150';      // grey: <50% of target
+    if (ratio >= 1) fill = '#6ee7b7';        // green: hit or exceeded
+    else if (ratio >= 0.5) fill = '#f5b041'; // amber: half to target
+    rect.setAttribute('fill', fill);
+    const title = document.createElementNS(NS, 'title');
+    title.textContent = `${w.weekStart}: ${w.totalMinutes} min (${w.percentOfTarget}% of target), ${w.sessions} session(s)`;
+    rect.appendChild(title);
+    svg.appendChild(rect);
+  });
+}
+
 async function loadPreview() {
   const r = await fetch('/api/me/preview?days=3');
   if (!r.ok) return;
@@ -305,6 +340,7 @@ restButton.addEventListener('click', async () => {
   logStatus.textContent = '';
   await loadHistory();
   await loadSummary();
+  await loadTrend();
 });
 
 logForm.addEventListener('submit', async (e) => {
@@ -329,6 +365,7 @@ logForm.addEventListener('submit', async (e) => {
   logForm.elements['notes'].value = '';
   await loadHistory();
   await loadSummary();
+  await loadTrend();
 });
 
 form.addEventListener('submit', async (e) => {
@@ -363,5 +400,6 @@ form.addEventListener('submit', async (e) => {
   await loadToday();
   await loadHistory();
   await loadSummary();
+  await loadTrend();
   await loadPreview();
 })();

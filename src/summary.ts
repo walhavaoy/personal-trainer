@@ -1,6 +1,13 @@
 import type { ProfileRow, WorkoutRow } from './db.js';
 import { startOfWeekDate, todayAndYesterday } from './tz.js';
 
+export interface WeekTrendEntry {
+  weekStart: string;
+  totalMinutes: number;
+  sessions: number;
+  percentOfTarget: number;
+}
+
 export type Trend = 'up' | 'down' | 'flat' | 'new';
 
 export interface WeekSummary {
@@ -17,6 +24,59 @@ export interface WeekSummary {
   weekOverWeekDeltaMinutes: number;   // thisWeek - lastWeek (signed)
   weekOverWeekTrend: Trend;
   weekCoachMessage: string;
+}
+
+/**
+ * Last N weeks of activity, oldest → newest.
+ * Each entry's weekStart is the Monday ISO date in the user's tz.
+ * The current (in-progress) week is included as the last entry.
+ */
+export function computeTrend(
+  profile: ProfileRow,
+  workouts: WorkoutRow[],
+  now: Date = new Date(),
+  weeks = 8,
+): WeekTrendEntry[] {
+  const tz = profile.timezone || 'UTC';
+  const target = Math.max(1, profile.weekly_minutes);
+
+  // Build week boundaries: start with this week's Monday, then walk back.
+  const boundaries: string[] = [];
+  let cursor = startOfWeekDate(now, tz);
+  for (let i = 0; i < weeks; i++) {
+    boundaries.unshift(cursor);
+    // step back 7 days from cursor (string math)
+    const d = new Date(cursor + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 7);
+    cursor = d.toISOString().slice(0, 10);
+  }
+
+  // Bucket workouts. For weeks[i] the half-open range is [boundaries[i], boundaries[i+1])
+  // — for the final (current) week we use Infinity-ish: anything ≥ that Monday.
+  const dateOf = (r: WorkoutRow): string =>
+    r.workout_date instanceof Date
+      ? r.workout_date.toISOString().slice(0, 10)
+      : String(r.workout_date).slice(0, 10);
+
+  const result: WeekTrendEntry[] = [];
+  for (let i = 0; i < boundaries.length; i++) {
+    const start = boundaries[i]!;
+    const end = boundaries[i + 1] ?? null;
+    const rows = workouts.filter((r) => {
+      const d = dateOf(r);
+      if (d < start) return false;
+      if (end !== null && d >= end) return false;
+      return true;
+    });
+    const totalMinutes = rows.reduce((s, r) => s + (r.completed_minutes ?? 0), 0);
+    result.push({
+      weekStart: start,
+      totalMinutes,
+      sessions: rows.length,
+      percentOfTarget: Math.min(999, Math.round((totalMinutes / target) * 100)),
+    });
+  }
+  return result;
 }
 
 function rowDate(row: WorkoutRow): string {

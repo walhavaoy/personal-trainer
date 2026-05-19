@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool, migrate, VALID_GOALS, VALID_LEVELS, isValidTimezone, type ProfileRow, type WorkoutRow } from './db.js';
 import { deriveSession, wasRestDay, type RecentContext } from './session.js';
-import { computeSummary } from './summary.js';
+import { computeSummary, computeTrend } from './summary.js';
 import { calendarDate, todayAndYesterday } from './tz.js';
 
 const logger = pino({ name: 'pt' });
@@ -395,6 +395,39 @@ app.get('/api/me/summary', async (req: Request, res: Response) => {
     res.json(computeSummary(profile, workouts.rows));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to compute summary');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/me/trend', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const weeksParam = req.query['weeks'];
+  let weeks = 8;
+  if (typeof weeksParam === 'string') {
+    const parsed = parseInt(weeksParam, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 26) {
+      res.status(400).json({ error: 'weeks must be an integer 1..26' });
+      return;
+    }
+    weeks = parsed;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    // Pull enough rows: weeks*7 days back from today, plus a few day buffer.
+    const workouts = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+        WHERE username = $1
+          AND workout_date >= CURRENT_DATE - ($2::int * 7 + 7) * INTERVAL '1 day'
+        ORDER BY workout_date DESC`,
+      [user.username, weeks],
+    );
+    res.json(computeTrend(profile, workouts.rows, new Date(), weeks));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to compute trend');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

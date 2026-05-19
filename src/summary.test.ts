@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeSummary } from './summary.js';
+import { computeSummary, computeTrend } from './summary.js';
 import type { ProfileRow, WorkoutRow } from './db.js';
 
 function profile(p: Partial<ProfileRow> = {}): ProfileRow {
@@ -109,6 +109,25 @@ describe('computeSummary', () => {
       workout('2026-05-18', 50), workout('2026-05-19', 60),
     ], TUE);
     assert.equal(s.percentOfTarget, 110);
+  });
+
+  it('computeTrend returns N weeks oldest-first, including the current week', () => {
+    const t = computeTrend(profile(), [
+      workout('2026-05-19', 30), // this week
+      workout('2026-05-13', 25), // last week
+      workout('2026-05-06', 50), // 2 weeks ago
+    ], TUE, 4);
+    assert.equal(t.length, 4);
+    // oldest first
+    const starts = t.map((w) => w.weekStart);
+    assert.deepEqual(starts, ['2026-04-27', '2026-05-04', '2026-05-11', '2026-05-18']);
+    // current week is the last entry
+    assert.equal(t[3]!.totalMinutes, 30);
+    assert.equal(t[2]!.totalMinutes, 25);
+    assert.equal(t[1]!.totalMinutes, 50);
+    assert.equal(t[0]!.totalMinutes, 0);
+    // percent based on profile.weekly_minutes (240): 30/240 = 12%
+    assert.equal(t[3]!.percentOfTarget, 13); // Math.round(30/240*100) = 13
   });
 
   it('respects user timezone when picking weekStart', () => {
