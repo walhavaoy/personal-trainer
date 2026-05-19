@@ -32,6 +32,22 @@ const resetStatus = document.getElementById('reset-status');
 
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
 
+// "today" / "yesterday" / "tomorrow" / "Mon" / "May 11" — chooses the most
+// readable form based on how recent or near-future the ISO date is.
+function relativeDate(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const days = Math.round((Date.parse(iso) - Date.parse(todayIso)) / 86400000);
+  if (days === 0) return 'today';
+  if (days === -1) return 'yesterday';
+  if (days === 1) return 'tomorrow';
+  const dt = new Date(iso + 'T12:00:00Z');
+  if (days >= -6 && days <= 6) {
+    return dt.toLocaleDateString(undefined, { weekday: 'short' });
+  }
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 async function loadMe() {
   const r = await fetch('/api/me');
   if (!r.ok) {
@@ -179,7 +195,9 @@ function renderHistoryItem(w) {
   const exCount = exDone > 0
     ? ' · <span class="muted">' + exDone + ' exercise' + (exDone === 1 ? '' : 's') + '</span>'
     : '';
-  summary.innerHTML = '<strong>' + w.date + '</strong> · ' + w.theme + ' · '
+  // Relative-date label, ISO date in title for unambiguous reference on hover.
+  const rel = relativeDate(w.date);
+  summary.innerHTML = '<strong title="' + w.date + '">' + rel + '</strong> · ' + w.theme + ' · '
     + '<span class="completed-min">' + w.completedMinutes + '</span>/' + w.plannedMinutes + ' min'
     + exCount;
   const actions = document.createElement('span');
@@ -301,10 +319,8 @@ async function loadPreview() {
   for (const p of items) {
     const li = document.createElement('li');
     const day = document.createElement('strong');
-    day.textContent = p.dayOfWeek;
-    const date = document.createElement('span');
-    date.className = 'muted preview-date';
-    date.textContent = p.date;
+    day.textContent = relativeDate(p.date);
+    day.title = p.date;
     const sep = document.createTextNode(' · ');
     const theme = document.createElement('span');
     theme.textContent = p.theme;
@@ -313,8 +329,6 @@ async function loadPreview() {
     mins.className = 'muted';
     mins.textContent = p.totalMinutes + ' min';
     li.appendChild(day);
-    li.appendChild(document.createTextNode(' '));
-    li.appendChild(date);
     li.appendChild(sep);
     li.appendChild(theme);
     li.appendChild(sep2);
