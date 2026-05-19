@@ -1,9 +1,11 @@
 import type { ProfileRow } from './db.js';
+import { prescriptionsFor, type ExercisePrescription } from './exercises.js';
 
 export interface SessionBlock {
   name: string;
   durationMinutes: number;
   notes: string;
+  exercises?: ExercisePrescription[];
 }
 
 export interface TodaySession {
@@ -97,8 +99,18 @@ export function deriveSession(
     const warmup = Math.max(5, Math.round(planned * 0.15));
     const main = Math.max(10, planned - warmup - 5);
     const cooldown = 5;
+    const level: 'beginner' | 'intermediate' | 'advanced' =
+      profile.fitness_level === 'advanced' ? 'advanced'
+        : profile.fitness_level === 'intermediate' ? 'intermediate'
+        : 'beginner';
+    const exercises = prescriptionsFor(theme, level, main);
     blocks.push({ name: 'Warm-up', durationMinutes: warmup, notes: 'Easy cardio + dynamic stretches.' });
-    blocks.push({ name: theme, durationMinutes: main, notes: 'Main work — focus on form and breathing.' });
+    blocks.push({
+      name: theme,
+      durationMinutes: main,
+      notes: 'Main work — focus on form and breathing.',
+      ...(exercises.length > 0 ? { exercises } : {}),
+    });
     blocks.push({ name: 'Cool-down', durationMinutes: cooldown, notes: 'Slow walk + static stretches.' });
   }
 

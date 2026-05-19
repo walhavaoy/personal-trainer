@@ -67,6 +67,17 @@ async function loadToday() {
     notes.textContent = b.notes;
     li.appendChild(title);
     li.appendChild(notes);
+    if (Array.isArray(b.exercises) && b.exercises.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'exercise-list';
+      ul.dataset.testid = 'pt-list-exercises';
+      for (const ex of b.exercises) {
+        const ei = document.createElement('li');
+        ei.textContent = ex.prescription;
+        ul.appendChild(ei);
+      }
+      li.appendChild(ul);
+    }
     sessionBlocks.appendChild(li);
   }
   sessionLoading.hidden = true;
