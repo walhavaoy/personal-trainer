@@ -73,13 +73,19 @@ export function deriveSession(
   profile: ProfileRow,
   now: Date = new Date(),
   ctx: RecentContext = { yesterdayComplianceRatio: null, streakDays: 0, yesterdayWasRest: false },
+  adaptationOverride?: 'baseline',
 ): TodaySession {
   const tz = profile.timezone || 'UTC';
   const dow = calendarDayOfWeek(now, tz);
   const themes = THEMES[profile.goal] ?? THEMES['general_fitness']!;
   const theme = themes[dow] ?? 'Active recovery';
   const factor = LEVEL_FACTOR[profile.fitness_level] ?? 1.0;
-  const adaptation = pickAdaptation(ctx, theme);
+  // adaptationOverride='baseline' is used by the preview endpoint so far-future
+  // days don't pick up a today-only cushion (e.g. "first session back" 0.9×)
+  // when the recent context happens to be empty.
+  const adaptation = adaptationOverride === 'baseline'
+    ? { factor: 1, kind: 'baseline' as const, note: '' }
+    : pickAdaptation(ctx, theme);
 
   const targetPerDay = Math.max(15, Math.round(profile.weekly_minutes / 6));
   const baseMinutes = theme === 'Rest' ? 0 : Math.round(targetPerDay * factor);

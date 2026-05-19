@@ -391,7 +391,7 @@ app.get('/api/me/preview', async (req: Request, res: Response) => {
     const previews: Array<{ date: string; dayOfWeek: string; theme: string; totalMinutes: number }> = [];
     for (let i = 1; i <= days; i++) {
       const at = new Date(now.getTime() + i * 24 * 3600 * 1000);
-      const session = deriveSession(profile, at);
+      const session = deriveSession(profile, at, undefined, 'baseline');
       previews.push({
         date: session.date,
         dayOfWeek: session.dayOfWeek,
