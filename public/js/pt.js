@@ -6,6 +6,7 @@ const sessionDay = document.getElementById('session-day');
 const sessionTheme = document.getElementById('session-theme');
 const sessionTotal = document.getElementById('session-total');
 const sessionBlocks = document.getElementById('session-blocks');
+const trainerNote = document.getElementById('trainer-note');
 const form = document.getElementById('profile-form');
 const profileStatus = document.getElementById('profile-status');
 const logForm = document.getElementById('log-form');
@@ -54,6 +55,8 @@ async function loadToday() {
   sessionDay.textContent = s.dayOfWeek;
   sessionTheme.textContent = s.theme;
   sessionTotal.textContent = s.totalMinutes;
+  trainerNote.textContent = s.trainerNote || '';
+  trainerNote.className = 'trainer-note trainer-note--' + (s.adaptation || 'baseline');
   sessionBlocks.innerHTML = '';
   for (const b of s.blocks) {
     const li = document.createElement('li');

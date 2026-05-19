@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow, type WorkoutRow } from './db.js';
-import { deriveSession } from './session.js';
+import { deriveSession, wasRestDay, type RecentContext } from './session.js';
 import { computeSummary } from './summary.js';
 
 const logger = pino({ name: 'pt' });
@@ -231,7 +231,11 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
     const profile = await getOrCreateProfile(user);
     // Derive theme/planned from the profile-driven session for the requested date,
     // not from client input — we don't want clients fabricating arbitrary themes.
-    const session = deriveSession(profile, new Date(`${dateInput}T12:00:00Z`));
+    // Use today's recent-context so the planned-minutes recorded match the adapted
+    // session the user was actually shown.
+    const sessionDate = new Date(`${dateInput}T12:00:00Z`);
+    const ctx = await loadRecentContext(user.username, profile, sessionDate);
+    const session = deriveSession(profile, sessionDate, ctx);
     const themeInput = typeof body['theme'] === 'string' ? body['theme'] : session.theme;
 
     const result = await pool.query<WorkoutRow>(
@@ -280,7 +284,9 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
   }
   try {
     const profile = await getOrCreateProfile(user);
-    res.json(deriveSession(profile));
+    const now = new Date();
+    const ctx = await loadRecentContext(user.username, profile, now);
+    res.json(deriveSession(profile, now, ctx));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to derive session');
     res.status(500).json({ error: 'Internal server error' });
@@ -298,6 +304,49 @@ function workoutToJson(row: WorkoutRow): Record<string, unknown> {
     completedMinutes: row.completed_minutes,
     notes: row.notes,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  };
+}
+
+async function loadRecentContext(username: string, profile: ProfileRow, today: Date): Promise<RecentContext> {
+  const result = await pool.query<WorkoutRow>(
+    `SELECT * FROM pt_workout
+      WHERE username = $1
+        AND workout_date >= CURRENT_DATE - INTERVAL '14 days'
+      ORDER BY workout_date DESC`,
+    [username],
+  );
+  const rows = result.rows;
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const yesterdayIso = ymd(yesterday);
+  const yWorkout = rows.find((r) => {
+    const d = r.workout_date instanceof Date ? ymd(r.workout_date) : String(r.workout_date).slice(0, 10);
+    return d === yesterdayIso;
+  });
+
+  let yesterdayComplianceRatio: number | null = null;
+  if (yWorkout && yWorkout.planned_minutes > 0) {
+    yesterdayComplianceRatio = yWorkout.completed_minutes / yWorkout.planned_minutes;
+  }
+
+  // Streak: walk back from today (or yesterday if today not logged) over consecutive logged days.
+  const loggedDates = new Set<string>(rows.map((r) =>
+    r.workout_date instanceof Date ? ymd(r.workout_date) : String(r.workout_date).slice(0, 10),
+  ));
+  let cursor: Date | null = null;
+  if (loggedDates.has(ymd(today))) cursor = new Date(today);
+  else if (loggedDates.has(yesterdayIso)) cursor = new Date(yesterday);
+  let streakDays = 0;
+  while (cursor && loggedDates.has(ymd(cursor))) {
+    streakDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+
+  return {
+    yesterdayComplianceRatio,
+    streakDays,
+    yesterdayWasRest: wasRestDay(profile, yesterday),
   };
 }
 
