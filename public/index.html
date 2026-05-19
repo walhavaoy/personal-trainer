@@ -14,11 +14,47 @@
     <main>
       <section id="welcome">
         <h2>Welcome, <span id="firstName">athlete</span>.</h2>
-        <p>Your personalised training plan is taking shape. Tell me what you want to work on today.</p>
       </section>
-      <section id="next-up">
+
+      <section id="today">
         <h3>Today's session</h3>
-        <p class="placeholder">— coming soon —</p>
+        <div id="session-loading" class="placeholder">Loading…</div>
+        <div id="session" hidden>
+          <div class="session-meta">
+            <span id="session-day"></span> · <span id="session-theme"></span> · <span id="session-total"></span> min
+          </div>
+          <ol id="session-blocks"></ol>
+        </div>
+      </section>
+
+      <section id="profile">
+        <h3>Your profile</h3>
+        <form id="profile-form" data-testid="pt-form-profile">
+          <label>
+            Goal
+            <select name="goal" data-testid="pt-select-goal">
+              <option value="general_fitness">General fitness</option>
+              <option value="strength">Strength</option>
+              <option value="endurance">Endurance</option>
+              <option value="weight_loss">Weight loss</option>
+              <option value="mobility">Mobility</option>
+            </select>
+          </label>
+          <label>
+            Fitness level
+            <select name="fitnessLevel" data-testid="pt-select-level">
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </label>
+          <label>
+            Weekly target minutes
+            <input type="number" name="weeklyMinutes" min="0" max="1500" step="15" data-testid="pt-input-weekly" />
+          </label>
+          <button type="submit" data-testid="pt-button-save">Save</button>
+          <span id="profile-status" class="muted"></span>
+        </form>
       </section>
     </main>
     <script src="/js/pt.js"></script>

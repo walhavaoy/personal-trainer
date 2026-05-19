@@ -3,6 +3,8 @@ import pino from 'pino';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pool, migrate, VALID_GOALS, VALID_LEVELS, type ProfileRow } from './db.js';
+import { deriveSession } from './session.js';
 
 const logger = pino({ name: 'pt' });
 
@@ -45,6 +47,36 @@ function getUser(req: Request): AuthedUser | null {
   };
 }
 
+async function getOrCreateProfile(user: AuthedUser): Promise<ProfileRow> {
+  const sel = await pool.query<ProfileRow>(
+    'SELECT * FROM pt_user WHERE username = $1',
+    [user.username],
+  );
+  if (sel.rows.length > 0) {
+    const row = sel.rows[0]!;
+    const emailChanged = user.email !== null && user.email !== row.email;
+    const nameChanged = user.fullName !== null && user.fullName !== row.full_name;
+    if (emailChanged || nameChanged) {
+      const upd = await pool.query<ProfileRow>(
+        `UPDATE pt_user
+            SET email = COALESCE($2, email),
+                full_name = COALESCE($3, full_name),
+                updated_at = now()
+          WHERE username = $1
+        RETURNING *`,
+        [user.username, user.email, user.fullName],
+      );
+      return upd.rows[0]!;
+    }
+    return row;
+  }
+  const ins = await pool.query<ProfileRow>(
+    `INSERT INTO pt_user (username, email, full_name) VALUES ($1, $2, $3) RETURNING *`,
+    [user.username, user.email, user.fullName],
+  );
+  return ins.rows[0]!;
+}
+
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -72,7 +104,14 @@ function servePublicFile(filePath: string, res: Response): void {
 }
 
 app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
-app.get('/readyz', (_req, res) => res.json({ status: 'ok' }));
+app.get('/readyz', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'error' });
+  }
+});
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.get('/api/me', (req: Request, res: Response) => {
@@ -83,6 +122,96 @@ app.get('/api/me', (req: Request, res: Response) => {
   }
   res.json(user);
 });
+
+app.get('/api/me/profile', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    res.json(profileToJson(profile));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to load profile');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/me/profile', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const body = req.body as Record<string, unknown> | undefined;
+  if (typeof body !== 'object' || body === null) {
+    res.status(400).json({ error: 'Body must be a JSON object' });
+    return;
+  }
+  const goal = typeof body['goal'] === 'string' ? body['goal'] : undefined;
+  const level = typeof body['fitnessLevel'] === 'string' ? body['fitnessLevel'] : undefined;
+  const weekly = typeof body['weeklyMinutes'] === 'number' ? body['weeklyMinutes'] : undefined;
+
+  if (goal !== undefined && !VALID_GOALS.has(goal)) {
+    res.status(400).json({ error: `goal must be one of: ${Array.from(VALID_GOALS).join(', ')}` });
+    return;
+  }
+  if (level !== undefined && !VALID_LEVELS.has(level)) {
+    res.status(400).json({ error: `fitnessLevel must be one of: ${Array.from(VALID_LEVELS).join(', ')}` });
+    return;
+  }
+  if (weekly !== undefined && (!Number.isInteger(weekly) || weekly < 0 || weekly > 1500)) {
+    res.status(400).json({ error: 'weeklyMinutes must be an integer between 0 and 1500' });
+    return;
+  }
+
+  try {
+    await getOrCreateProfile(user); // ensure exists
+    const upd = await pool.query<ProfileRow>(
+      `UPDATE pt_user
+          SET goal           = COALESCE($2, goal),
+              fitness_level  = COALESCE($3, fitness_level),
+              weekly_minutes = COALESCE($4, weekly_minutes),
+              updated_at     = now()
+        WHERE username = $1
+      RETURNING *`,
+      [user.username, goal ?? null, level ?? null, weekly ?? null],
+    );
+    res.json(profileToJson(upd.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to update profile');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/me/today', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    res.json(deriveSession(profile));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to derive session');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+function profileToJson(row: ProfileRow): Record<string, unknown> {
+  return {
+    username: row.username,
+    email: row.email,
+    fullName: row.full_name,
+    goal: row.goal,
+    fitnessLevel: row.fitness_level,
+    weeklyMinutes: row.weekly_minutes,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  };
+}
 
 app.get('/', (_req, res) => servePublicFile('index.html', res));
 
@@ -102,18 +231,28 @@ app.use((err: Error & { type?: string }, _req: Request, res: Response, _next: Ne
 
 const PORT = parseInt(process.env['PORT'] ?? '8080', 10) || 8080;
 
-const server = app.listen(PORT, () => {
-  logger.info({ port: PORT, trustForwardAuth: TRUST_FORWARD_AUTH }, 'PT service listening');
-});
-
-let shuttingDown = false;
-for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info({ signal: sig }, 'Shutting down');
-    server.close(() => process.exit(0));
+async function main(): Promise<void> {
+  await migrate();
+  const server = app.listen(PORT, () => {
+    logger.info({ port: PORT, trustForwardAuth: TRUST_FORWARD_AUTH }, 'PT service listening');
   });
+  let shuttingDown = false;
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(sig, () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info({ signal: sig }, 'Shutting down');
+      server.close(async () => {
+        try { await pool.end(); } catch (e) { logger.error({ err: e }, 'pool close'); }
+        process.exit(0);
+      });
+    });
+  }
 }
+
+main().catch((err) => {
+  logger.fatal({ err }, 'Failed to start');
+  process.exit(1);
+});
 
 export { app };

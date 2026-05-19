@@ -33,6 +33,8 @@ spec:
               value: "8080"
             - name: TRUST_FORWARD_AUTH
               value: "true"
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
           ports:
             - containerPort: 8080
               name: http

@@ -7,3 +7,10 @@ replicas: 1
 # pt deploys to project-pt so the realm operator's auto-Ingress
 # (created from the ClawRealm CR) can route pt.tmpclaw.io to product:8080.
 deployNamespace: project-pt
+
+postgres:
+  host: postgres.tmpclaw.svc.cluster.local
+  port: 5432
+  database: pt
+  user: tmpclaw
+  password: tmpclaw

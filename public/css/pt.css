@@ -4,6 +4,7 @@
   --muted: #8a93a0;
   --accent: #6ee7b7;
   --card: #161a20;
+  --border: #222831;
 }
 * { box-sizing: border-box; }
 body {
@@ -15,7 +16,7 @@ body {
 }
 header {
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #222831;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -26,4 +27,30 @@ main { padding: 2rem; max-width: 720px; margin: 0 auto; }
 section { background: var(--card); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
 section h2 { margin-top: 0; }
 section h3 { margin-top: 0; color: var(--accent); }
-.placeholder { color: var(--muted); font-style: italic; }
+.placeholder, .muted { color: var(--muted); }
+.session-meta { color: var(--muted); margin-bottom: 0.75rem; font-size: 0.9rem; }
+#session-blocks { padding-left: 1.25rem; }
+#session-blocks li { margin-bottom: 0.5rem; }
+form label { display: block; margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--muted); }
+form select, form input {
+  display: block;
+  margin-top: 0.25rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: #0b0e12;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+form button {
+  background: var(--accent);
+  color: #0b0e12;
+  border: 0;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+form button:hover { filter: brightness(1.1); }
+#profile-status { margin-left: 0.75rem; font-size: 0.85rem; }
