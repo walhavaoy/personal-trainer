@@ -365,6 +365,47 @@ app.get('/api/me/summary', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/me/preview', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  // Cap N at 7 to bound CPU and keep the response trivially small.
+  const daysParam = req.query['days'];
+  let days = 3;
+  if (typeof daysParam === 'string') {
+    const parsed = parseInt(daysParam, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 7) {
+      res.status(400).json({ error: 'days must be an integer 1..7' });
+      return;
+    }
+    days = parsed;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    const now = new Date();
+    // For previews we deliberately pass a *blank* recent context so the
+    // sketch shows the baseline plan, not an adaptation that depends on
+    // what may or may not happen between now and then.
+    const previews: Array<{ date: string; dayOfWeek: string; theme: string; totalMinutes: number }> = [];
+    for (let i = 1; i <= days; i++) {
+      const at = new Date(now.getTime() + i * 24 * 3600 * 1000);
+      const session = deriveSession(profile, at);
+      previews.push({
+        date: session.date,
+        dayOfWeek: session.dayOfWeek,
+        theme: session.theme,
+        totalMinutes: session.totalMinutes,
+      });
+    }
+    res.json(previews);
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to compute preview');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/me/today', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

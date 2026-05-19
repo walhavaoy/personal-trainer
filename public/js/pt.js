@@ -24,6 +24,7 @@ const summaryLast = document.getElementById('summary-last');
 const summaryTrend = document.getElementById('summary-trend');
 const summaryLastWeek = document.getElementById('summary-last-week');
 const summaryCoach = document.getElementById('summary-coach');
+const previewList = document.getElementById('preview-list');
 
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
 
@@ -217,6 +218,36 @@ function beginEditHistoryItem(li, w) {
   });
 }
 
+async function loadPreview() {
+  const r = await fetch('/api/me/preview?days=3');
+  if (!r.ok) return;
+  const items = await r.json();
+  previewList.innerHTML = '';
+  for (const p of items) {
+    const li = document.createElement('li');
+    const day = document.createElement('strong');
+    day.textContent = p.dayOfWeek;
+    const date = document.createElement('span');
+    date.className = 'muted preview-date';
+    date.textContent = p.date;
+    const sep = document.createTextNode(' · ');
+    const theme = document.createElement('span');
+    theme.textContent = p.theme;
+    const sep2 = document.createTextNode(' · ');
+    const mins = document.createElement('span');
+    mins.className = 'muted';
+    mins.textContent = p.totalMinutes + ' min';
+    li.appendChild(day);
+    li.appendChild(document.createTextNode(' '));
+    li.appendChild(date);
+    li.appendChild(sep);
+    li.appendChild(theme);
+    li.appendChild(sep2);
+    li.appendChild(mins);
+    previewList.appendChild(li);
+  }
+}
+
 async function loadSummary() {
   const r = await fetch('/api/me/summary');
   if (!r.ok) return;
@@ -288,6 +319,7 @@ form.addEventListener('submit', async (e) => {
   profileStatus.textContent = 'Saved.';
   await loadToday();
   await loadSummary();
+  await loadPreview();
 });
 
 (async () => {
@@ -297,4 +329,5 @@ form.addEventListener('submit', async (e) => {
   await loadToday();
   await loadHistory();
   await loadSummary();
+  await loadPreview();
 })();
