@@ -27,6 +27,8 @@ const summaryTrend = document.getElementById('summary-trend');
 const summaryLastWeek = document.getElementById('summary-last-week');
 const summaryCoach = document.getElementById('summary-coach');
 const previewList = document.getElementById('preview-list');
+const resetButton = document.getElementById('reset-button');
+const resetStatus = document.getElementById('reset-status');
 
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
 
@@ -345,6 +347,26 @@ async function loadSummary() {
 
   summaryEl.hidden = false;
 }
+
+resetButton.addEventListener('click', async () => {
+  const phrase = prompt('Type DELETE to wipe every workout you have logged. This cannot be undone.');
+  if (phrase !== 'DELETE') return;
+  resetStatus.textContent = 'Deleting…';
+  const r = await fetch('/api/me/workouts', {
+    method: 'DELETE',
+    headers: { 'X-Confirm-Delete-All': 'yes' },
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: 'failed' }));
+    resetStatus.textContent = 'Error: ' + (err.error || 'failed');
+    return;
+  }
+  const out = await r.json();
+  resetStatus.textContent = `Deleted ${out.deleted} workout(s).`;
+  await loadHistory();
+  await loadSummary();
+  await loadTrend();
+});
 
 restButton.addEventListener('click', async () => {
   if (!confirm('Take today as a rest day?')) return;

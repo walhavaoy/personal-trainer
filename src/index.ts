@@ -193,6 +193,68 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/me/workouts.csv', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const result = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout WHERE username = $1 ORDER BY workout_date ASC, id ASC`,
+      [user.username],
+    );
+    const escape = (v: string): string =>
+      /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const lines = ['date,theme,planned_minutes,completed_minutes,exercises_completed,notes'];
+    for (const r of result.rows) {
+      const date = r.workout_date instanceof Date
+        ? r.workout_date.toISOString().slice(0, 10)
+        : String(r.workout_date).slice(0, 10);
+      const ex = Array.isArray(r.exercises_completed) ? r.exercises_completed.join('; ') : '';
+      lines.push([
+        date,
+        escape(r.theme),
+        String(r.planned_minutes),
+        String(r.completed_minutes),
+        escape(ex),
+        escape(r.notes ?? ''),
+      ].join(','));
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="pt-workouts-${user.username}.csv"`);
+    res.send(lines.join('\n') + '\n');
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to export CSV');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/me/workouts', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  // Require an explicit confirmation header so a one-character typo in the URL
+  // doesn't wipe a user's history.
+  if (req.headers['x-confirm-delete-all'] !== 'yes') {
+    res.status(400).json({ error: 'set header X-Confirm-Delete-All: yes to confirm bulk delete' });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      'DELETE FROM pt_workout WHERE username = $1',
+      [user.username],
+    );
+    logger.warn({ username: user.username, deleted: result.rowCount }, 'Bulk-deleted all workouts');
+    res.json({ deleted: result.rowCount ?? 0 });
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to bulk-delete workouts');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/me/workouts', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

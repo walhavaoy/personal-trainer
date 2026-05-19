@@ -81,6 +81,16 @@
         <ul id="preview-list" data-testid="pt-list-preview"></ul>
       </section>
 
+      <section id="data">
+        <h3>Your data</h3>
+        <p class="muted">Take it with you, or wipe it clean.</p>
+        <div class="data-actions">
+          <a href="/api/me/workouts.csv" class="link-btn" data-testid="pt-link-export">Export CSV</a>
+          <button type="button" id="reset-button" class="link-btn link-btn--danger" data-testid="pt-button-reset">Delete all my workouts</button>
+          <span id="reset-status" class="muted"></span>
+        </div>
+      </section>
+
       <section id="history">
         <h3>Recent workouts</h3>
         <div id="history-loading" class="placeholder">Loading…</div>
