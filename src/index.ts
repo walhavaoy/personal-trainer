@@ -361,12 +361,37 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
     const session = deriveSession(profile, sessionDate, ctx);
     const themeInput = typeof body['theme'] === 'string' ? body['theme'] : session.theme;
 
+    // Validate exercisesCompleted against the prescribed names so callers can't
+    // claim credit for exercises that weren't scheduled today.
+    const completedInput = body['exercisesCompleted'];
+    let exercisesCompleted: string[] = [];
+    if (Array.isArray(completedInput)) {
+      const prescribed = new Set(
+        session.blocks.flatMap((b) => (b.exercises ?? []).map((e) => e.name)),
+      );
+      const seen = new Set<string>();
+      for (const v of completedInput) {
+        if (typeof v !== 'string') {
+          res.status(400).json({ error: 'exercisesCompleted must be an array of strings' });
+          return;
+        }
+        if (!prescribed.has(v)) {
+          res.status(400).json({ error: `exercise "${v}" not prescribed for this session` });
+          return;
+        }
+        if (!seen.has(v)) { seen.add(v); exercisesCompleted.push(v); }
+      }
+    } else if (completedInput !== undefined) {
+      res.status(400).json({ error: 'exercisesCompleted must be an array of strings' });
+      return;
+    }
+
     const result = await pool.query<WorkoutRow>(
       `INSERT INTO pt_workout
-            (username, workout_date, theme, planned_minutes, completed_minutes, notes)
-       VALUES ($1, $2, $3, $4, $5, $6)
+            (username, workout_date, theme, planned_minutes, completed_minutes, notes, exercises_completed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [user.username, dateInput, themeInput, session.totalMinutes, completed, notes],
+      [user.username, dateInput, themeInput, session.totalMinutes, completed, notes, exercisesCompleted],
     );
     logger.info({ username: user.username, date: dateInput, completed }, 'Workout logged');
     res.status(201).json(workoutToJson(result.rows[0]!));
@@ -500,6 +525,7 @@ function workoutToJson(row: WorkoutRow): Record<string, unknown> {
     plannedMinutes: row.planned_minutes,
     completedMinutes: row.completed_minutes,
     notes: row.notes,
+    exercisesCompleted: Array.isArray(row.exercises_completed) ? row.exercises_completed : [],
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   };
 }

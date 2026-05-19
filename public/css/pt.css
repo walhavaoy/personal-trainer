@@ -80,6 +80,8 @@ form button:hover { filter: brightness(1.1); }
 .trainer-note--progression { border-left-color: var(--accent); }
 .exercise-list { margin: 0.4rem 0 0 0; padding-left: 1.25rem; }
 .exercise-list li { color: var(--fg); font-size: 0.92rem; padding: 0.1rem 0; }
+.exercise-row { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.exercise-row input { margin: 0; }
 .chip--trend-up   { color: var(--accent); border-color: var(--accent); }
 .chip--trend-down { color: #f5b041;       border-color: #f5b041; }
 .chip--trend-flat { color: var(--muted);  border-color: var(--border); }

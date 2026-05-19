@@ -98,7 +98,18 @@ async function loadToday() {
       ul.dataset.testid = 'pt-list-exercises';
       for (const ex of b.exercises) {
         const ei = document.createElement('li');
-        ei.textContent = ex.prescription;
+        const lbl = document.createElement('label');
+        lbl.className = 'exercise-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = 'exercisesCompleted';
+        cb.value = ex.name;
+        cb.dataset.testid = 'pt-check-exercise';
+        const span = document.createElement('span');
+        span.textContent = ' ' + ex.prescription;
+        lbl.appendChild(cb);
+        lbl.appendChild(span);
+        ei.appendChild(lbl);
         ul.appendChild(ei);
       }
       li.appendChild(ul);
@@ -161,8 +172,14 @@ function renderHistoryItem(w) {
   const head = document.createElement('div');
   head.className = 'history-head';
   const summary = document.createElement('span');
+  // When we have exercise check data, show N/M alongside the minute count
+  const exDone = Array.isArray(w.exercisesCompleted) ? w.exercisesCompleted.length : 0;
+  const exCount = exDone > 0
+    ? ' · <span class="muted">' + exDone + ' exercise' + (exDone === 1 ? '' : 's') + '</span>'
+    : '';
   summary.innerHTML = '<strong>' + w.date + '</strong> · ' + w.theme + ' · '
-    + '<span class="completed-min">' + w.completedMinutes + '</span>/' + w.plannedMinutes + ' min';
+    + '<span class="completed-min">' + w.completedMinutes + '</span>/' + w.plannedMinutes + ' min'
+    + exCount;
   const actions = document.createElement('span');
   actions.className = 'history-actions';
   const editBtn = document.createElement('button');
@@ -346,10 +363,13 @@ restButton.addEventListener('click', async () => {
 logForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   logStatus.textContent = 'Saving…';
+  const checks = Array.from(document.querySelectorAll('input[name="exercisesCompleted"]:checked'))
+    .map((cb) => cb.value);
   const payload = {
     date: logForm.dataset.date,
     completedMinutes: parseInt(logForm.elements['completedMinutes'].value, 10) || 0,
     notes: logForm.elements['notes'].value || undefined,
+    exercisesCompleted: checks,
   };
   const r = await fetch('/api/me/workouts', {
     method: 'POST',
