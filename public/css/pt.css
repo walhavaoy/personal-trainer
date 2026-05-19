@@ -112,3 +112,45 @@ form button:hover { filter: brightness(1.1); }
   background: rgba(110, 231, 183, 0.05);
   font-size: 0.92rem;
 }
+
+/* Make the trend chart shrink to its container on narrow screens. */
+#summary-trend-svg { max-width: 100%; height: auto; }
+
+@media (max-width: 640px) {
+  header { padding: 1rem 1rem; flex-wrap: wrap; gap: 0.25rem; }
+  header h1 { font-size: 1.1rem; }
+  main { padding: 1rem; }
+  section { padding: 1rem; }
+
+  /* Stack summary rows on narrow screens so the trend chart and labels don't
+     squeeze each other off the page. */
+  .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    padding: 0.4rem 0;
+  }
+  .summary-row .summary-value { width: 100%; }
+  #summary-trend-svg { width: 100%; }
+
+  /* History row: stack the title and action buttons. */
+  .history-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  .history-actions { align-self: flex-end; }
+
+  /* Inline edit form wraps to multiple lines on small screens. */
+  .history-edit input { width: auto; min-width: 0; flex: 1 1 6em; }
+
+  /* Data + rest-day actions stack vertically. */
+  .data-actions { flex-direction: column; align-items: stretch; }
+  .data-actions .link-btn { text-align: left; }
+
+  /* Larger tap targets on mobile. */
+  form button { padding: 0.75rem 1rem; width: 100%; }
+  #rest-button { width: auto; }
+  form input, form select { padding: 0.65rem 0.6rem; font-size: 1rem; }
+  .exercise-row { padding: 0.25rem 0; }
+}
