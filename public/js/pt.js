@@ -21,6 +21,11 @@ const summarySessions = document.getElementById('summary-sessions');
 const summaryBar = document.getElementById('summary-bar');
 const summaryStreak = document.getElementById('summary-streak');
 const summaryLast = document.getElementById('summary-last');
+const summaryTrend = document.getElementById('summary-trend');
+const summaryLastWeek = document.getElementById('summary-last-week');
+const summaryCoach = document.getElementById('summary-coach');
+
+const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
 
 async function loadMe() {
   const r = await fetch('/api/me');
@@ -133,6 +138,15 @@ async function loadSummary() {
   summaryStreak.textContent = s.streakDays + (s.streakDays === 1 ? ' day' : ' days');
   summaryStreak.classList.toggle('chip--active', s.streakDays > 0);
   summaryLast.textContent = s.lastWorkoutDate ? '· last on ' + s.lastWorkoutDate : '';
+
+  const glyph = TREND_GLYPH[s.weekOverWeekTrend] || '·';
+  const sign = s.weekOverWeekDeltaMinutes > 0 ? '+' : '';
+  summaryTrend.textContent = `${glyph} ${sign}${s.weekOverWeekDeltaMinutes} min`;
+  summaryTrend.className = 'chip chip--trend-' + s.weekOverWeekTrend;
+  summaryLastWeek.textContent = `· last week ${s.lastWeekMinutes} min / ${s.lastWeekSessions} session(s)`;
+  summaryCoach.textContent = s.weekCoachMessage || '';
+  summaryCoach.className = 'coach-message coach-message--' + s.weekOverWeekTrend;
+
   summaryEl.hidden = false;
 }
 
