@@ -1,0 +1,9 @@
+image:
+  repository: localhost:31500/tmpclaw/pt
+  tag: "0.1.0"
+imagePullPolicy: Always
+replicas: 1
+
+# pt deploys to project-pt so the realm operator's auto-Ingress
+# (created from the ClawRealm CR) can route pt.tmpclaw.io to product:8080.
+deployNamespace: project-pt

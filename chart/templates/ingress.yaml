@@ -1,0 +1,31 @@
+{{- $ns := .Values.deployNamespace | default .Release.Namespace -}}
+# The realm operator creates a default Ingress that routes pt.tmpclaw.io -> product:8080
+# WITHOUT forward-auth. PT is a private app — every page needs the user identity, so
+# we override with an IngressRoute that matches the whole host at high priority and
+# applies the Keycloak forward-auth middleware. /healthz and /readyz are
+# probed in-cluster (kubelet hits the pod IP directly) so they bypass this entirely.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: pt-authed
+  namespace: {{ $ns }}
+  labels:
+    app: pt
+spec:
+  entryPoints: [web, websecure]
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: pt.tmpclaw.io
+  routes:
+    - kind: Rule
+      match: Host(`pt.tmpclaw.io`)
+      priority: 100
+      middlewares:
+        - name: strip-forwarded-user
+          namespace: tmpclaw
+        - name: forward-auth
+          namespace: tmpclaw
+      services:
+        - name: product
+          port: 8080

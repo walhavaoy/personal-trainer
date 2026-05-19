@@ -1,0 +1,86 @@
+{{- $ns := .Values.deployNamespace | default .Release.Namespace -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pt
+  namespace: {{ $ns }}
+  labels:
+    app: pt
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: pt
+  template:
+    metadata:
+      labels:
+        app: pt
+      annotations:
+        tmpclaw.io/version: {{ .Values.image.tag | quote }}
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: pt
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | toString }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: PORT
+              value: "8080"
+            - name: TRUST_FORWARD_AUTH
+              value: "true"
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product
+  namespace: {{ $ns }}
+  labels:
+    app: pt
+    tmpclaw.io/realm-product: "true"
+spec:
+  selector:
+    app: pt
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
