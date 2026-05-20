@@ -56,7 +56,8 @@ assert() {
   fi
 }
 
-status_of() { echo "$1" | cut -f1; }
+# Multi-line bodies (e.g. CSV) confuse cut -f1; restrict status to the first line.
+status_of() { echo "$1" | head -n1 | cut -f1; }
 body_of() { echo "$1" | cut -f2-; }
 field()    { echo "$2" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{const o=JSON.parse(d);process.stdout.write(String(o$1 ?? ''))}catch{process.stdout.write('')}})"; }
 
@@ -126,6 +127,90 @@ r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$WORKOUT_ID" '{completedMinutes:
 assert "PATCH own workout → 200"               200       "$(status_of "$r")"
 assert "minutes updated to 35"                 35        "$(field ".completedMinutes" "$(body_of "$r")")"
 
+# ── Per-exercise check-off validation ───────────────────────────────────────
+section "exercisesCompleted validation"
+# Use a fresh user so we don't conflict with WORKOUT_ID above.
+EX_USER="ex-$$-$RANDOM"
+r=$(remote "$EX_USER" PUT /api/me/profile '{goal:"strength",fitnessLevel:"intermediate",weeklyMinutes:240}')
+assert "ex_user profile set → 200"             200       "$(status_of "$r")"
+
+r=$(remote "$EX_USER" POST /api/me/workouts '{completedMinutes:30, exercisesCompleted:["bench press"]}')
+assert "unprescribed exercise → 400"           400       "$(status_of "$r")"
+
+r=$(remote "$EX_USER" POST /api/me/workouts '{completedMinutes:30, exercisesCompleted:"Pull-up"}')
+assert "exercisesCompleted not an array → 400" 400       "$(status_of "$r")"
+
+# Find a prescribed exercise name for today's session and POST with it.
+T=$(remote "$EX_USER" GET /api/me/today)
+PRESCRIBED=$(echo "$(body_of "$T")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const s=JSON.parse(d);const ex=(s.blocks||[]).flatMap(b=>(b.exercises||[]).map(e=>e.name));process.stdout.write(ex[0]||'')}catch{process.stdout.write('')}})")
+if [ -n "$PRESCRIBED" ]; then
+  r=$(remote "$EX_USER" POST /api/me/workouts "{completedMinutes:30, exercisesCompleted:[\"$PRESCRIBED\"]}")
+  assert "valid prescribed exercise → 201"     201       "$(status_of "$r")"
+fi
+
+# ── Rest day shortcut ───────────────────────────────────────────────────────
+section "rest-day shortcut"
+REST_USER="rest-$$-$RANDOM"
+r=$(remote "$REST_USER" POST /api/me/today/rest '{notes:"smoke"}')
+assert "POST /today/rest → 201"                201       "$(status_of "$r")"
+assert "theme is Rest"                         Rest      "$(field ".theme" "$(body_of "$r")")"
+assert "completed is 0"                        0         "$(field ".completedMinutes" "$(body_of "$r")")"
+
+r=$(remote "$REST_USER" POST /api/me/today/rest '{}')
+assert "second rest call → 409"                409       "$(status_of "$r")"
+
+# ── Preview / Trend / Summary / CSV ─────────────────────────────────────────
+section "preview, trend, summary, csv"
+r=$(remote "$TEST_USER" GET '/api/me/preview?days=3')
+assert "GET /preview?days=3 → 200"             200       "$(status_of "$r")"
+PREVIEW_LEN=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d).length))}catch{process.stdout.write('?')}})")
+assert "preview returns 3 days"                3         "$PREVIEW_LEN"
+
+r=$(remote "$TEST_USER" GET '/api/me/preview?days=0')
+assert "preview days=0 → 400"                  400       "$(status_of "$r")"
+
+r=$(remote "$TEST_USER" GET '/api/me/trend?weeks=4')
+assert "GET /trend?weeks=4 → 200"              200       "$(status_of "$r")"
+TREND_LEN=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d).length))}catch{process.stdout.write('?')}})")
+assert "trend returns 4 weeks"                 4         "$TREND_LEN"
+
+r=$(remote "$TEST_USER" GET /api/me/summary)
+assert "GET /api/me/summary → 200"             200       "$(status_of "$r")"
+
+r=$(remote "$TEST_USER" GET /api/me/workouts.csv)
+assert "GET /workouts.csv → 200"               200       "$(status_of "$r")"
+FIRST_LINE=$(echo "$(body_of "$r")" | head -1)
+assert "CSV header is correct"                 "date,theme,planned_minutes,completed_minutes,exercises_completed,notes" "$FIRST_LINE"
+
+# ── Theme filter + ?before= pagination ──────────────────────────────────────
+section "history filter + pagination"
+# Seed 3 backdated workouts for FILT_USER so we have multiple themes.
+FILT_USER="filt-$$-$RANDOM"
+r=$(remote "$FILT_USER" PUT /api/me/profile '{goal:"strength",fitnessLevel:"intermediate",weeklyMinutes:240}')
+# Strength: Mon=Push, Tue=Pull, Wed=Legs. Use dates relative to today.
+TODAY_ISO=$(date -u +%Y-%m-%d)
+D_2_AGO=$(date -u -d '2 days ago' +%Y-%m-%d 2>/dev/null || date -u -v-2d +%Y-%m-%d)
+D_3_AGO=$(date -u -d '3 days ago' +%Y-%m-%d 2>/dev/null || date -u -v-3d +%Y-%m-%d)
+remote "$FILT_USER" POST /api/me/workouts "{date:\"$D_2_AGO\", completedMinutes:30}" > /dev/null
+remote "$FILT_USER" POST /api/me/workouts "{date:\"$D_3_AGO\", completedMinutes:30}" > /dev/null
+
+r=$(remote "$FILT_USER" GET /api/me/workouts)
+ALL_COUNT=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d).length))}catch{process.stdout.write('?')}})")
+assert "unfiltered: 2 workouts"                2         "$ALL_COUNT"
+
+# Pull one row to learn its theme, then filter by it — should match exactly 1.
+THEME_OF_FIRST=$(remote "$FILT_USER" GET /api/me/workouts | cut -f2- | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(d)[0].theme)}catch{process.stdout.write('')}})")
+r=$(remote "$FILT_USER" GET "/api/me/workouts?theme=$THEME_OF_FIRST")
+FILT_COUNT=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d).length))}catch{process.stdout.write('?')}})")
+assert "?theme= filter returns ≥1"             1         "$FILT_COUNT"
+
+r=$(remote "$FILT_USER" GET '/api/me/workouts?before=not-a-date')
+assert "?before bad format → 400"              400       "$(status_of "$r")"
+
+r=$(remote "$FILT_USER" GET "/api/me/workouts?before=$D_2_AGO")
+OLDER_COUNT=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d).length))}catch{process.stdout.write('?')}})")
+assert "?before= returns older only"           1         "$OLDER_COUNT"
+
 # ── Dashboard batch ─────────────────────────────────────────────────────────
 section "dashboard batch endpoint"
 r=$(remote "$TEST_USER" GET /api/me/dashboard)
@@ -143,7 +228,11 @@ assert "bulk delete with header → 200"         200       "$(status_of "$r")"
 DELETED=$(field ".deleted" "$(body_of "$r")")
 assert "deleted count is 1"                    1         "$DELETED"
 
-# ── Cleanup: also delete OTHER_USER's profile row if it auto-created ────────
+# ── Cleanup test users' rows ────────────────────────────────────────────────
+for u in "$EX_USER" "$REST_USER" "$FILT_USER"; do
+  remote "$u" DELETE /api/me/workouts "" "'X-Confirm-Delete-All': 'yes'," > /dev/null
+done
+
 section "summary"
 TOTAL=$((PASS + FAIL))
 if [ "$FAIL" -eq 0 ]; then
