@@ -129,40 +129,14 @@ app.get('/api/me/dashboard', async (req: Request, res: Response) => {
     const tz = profile.timezone || 'UTC';
     const now = new Date();
 
-    // Fetch the workout rows once and reuse for summary, trend, and history.
-    const workoutsResult = await pool.query<WorkoutRow>(
-      `SELECT * FROM pt_workout
-        WHERE username = $1
-          AND workout_date >= CURRENT_DATE - INTERVAL '70 days'
-        ORDER BY workout_date DESC, id DESC`,
-      [user.username],
-    );
-    const workouts = workoutsResult.rows;
+    // Fetch the workout rows once and reuse for context, summary, trend, history, and previous-session lookup.
+    const workouts = await loadRecentWorkouts(user.username, 70);
 
-    const ctx = await loadRecentContext(user.username, profile, now);
+    const ctx = computeRecentContext(workouts, profile, now);
     const session = deriveSession(profile, now, ctx);
 
-    // previousSession: most recent same-theme workout before today.
     const todayIso = calendarDate(now, tz);
-    let previousSession: { date: string; completedMinutes: number; plannedMinutes: number } | null = null;
-    if (session.theme !== 'Rest') {
-      const prev = workouts.find((r) => {
-        const d = r.workout_date instanceof Date
-          ? r.workout_date.toISOString().slice(0, 10)
-          : String(r.workout_date).slice(0, 10);
-        return r.theme === session.theme && d < todayIso;
-      });
-      if (prev) {
-        const d = prev.workout_date instanceof Date
-          ? prev.workout_date.toISOString().slice(0, 10)
-          : String(prev.workout_date).slice(0, 10);
-        previousSession = {
-          date: d,
-          completedMinutes: prev.completed_minutes,
-          plannedMinutes: prev.planned_minutes,
-        };
-      }
-    }
+    const previousSession = findPreviousSameThemeSession(workouts, session.theme, todayIso);
 
     const previews: Array<{ date: string; dayOfWeek: string; theme: string; totalMinutes: number }> = [];
     for (let i = 1; i <= 3; i++) {
@@ -489,7 +463,8 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
     // Use today's recent-context so the planned-minutes recorded match the adapted
     // session the user was actually shown.
     const sessionDate = new Date(`${dateInput}T12:00:00Z`);
-    const ctx = await loadRecentContext(user.username, profile, sessionDate);
+    const rows = await loadRecentWorkouts(user.username, 14);
+    const ctx = computeRecentContext(rows, profile, sessionDate);
     const session = deriveSession(profile, sessionDate, ctx);
     const themeInput = typeof body['theme'] === 'string' ? body['theme'] : session.theme;
 
@@ -664,36 +639,13 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
   try {
     const profile = await getOrCreateProfile(user);
     const now = new Date();
-    const ctx = await loadRecentContext(user.username, profile, now);
+    // 70 days is enough to find a previous same-theme session for most schedules.
+    const rows = await loadRecentWorkouts(user.username, 70);
+    const ctx = computeRecentContext(rows, profile, now);
     const session = deriveSession(profile, now, ctx);
     const tz = profile.timezone || 'UTC';
     const todayIso = calendarDate(now, tz);
-
-    // Find the most recent workout with the same theme that isn't today.
-    // Rest themes don't have a meaningful "last session" — skip the lookup.
-    let previousSession: { date: string; completedMinutes: number; plannedMinutes: number } | null = null;
-    if (session.theme !== 'Rest') {
-      const prev = await pool.query<WorkoutRow>(
-        `SELECT * FROM pt_workout
-          WHERE username = $1
-            AND theme = $2
-            AND workout_date < $3::date
-          ORDER BY workout_date DESC
-          LIMIT 1`,
-        [user.username, session.theme, todayIso],
-      );
-      if (prev.rows.length > 0) {
-        const row = prev.rows[0]!;
-        const d = row.workout_date instanceof Date
-          ? row.workout_date.toISOString().slice(0, 10)
-          : String(row.workout_date).slice(0, 10);
-        previousSession = {
-          date: d,
-          completedMinutes: row.completed_minutes,
-          plannedMinutes: row.planned_minutes,
-        };
-      }
-    }
+    const previousSession = findPreviousSameThemeSession(rows, session.theme, todayIso);
 
     res.json({ ...session, previousSession });
   } catch (err) {
@@ -717,27 +669,36 @@ function workoutToJson(row: WorkoutRow): Record<string, unknown> {
   };
 }
 
-async function loadRecentContext(username: string, profile: ProfileRow, now: Date): Promise<RecentContext> {
-  const tz = profile.timezone || 'UTC';
+function rowDateIso(r: WorkoutRow): string {
+  return r.workout_date instanceof Date
+    ? r.workout_date.toISOString().slice(0, 10)
+    : String(r.workout_date).slice(0, 10);
+}
+
+/** Load the user's recent workout rows for in-process derivation. */
+async function loadRecentWorkouts(username: string, days: number): Promise<WorkoutRow[]> {
   const result = await pool.query<WorkoutRow>(
     `SELECT * FROM pt_workout
       WHERE username = $1
-        AND workout_date >= CURRENT_DATE - INTERVAL '14 days'
-      ORDER BY workout_date DESC`,
-    [username],
+        AND workout_date >= CURRENT_DATE - ($2::int * INTERVAL '1 day')
+      ORDER BY workout_date DESC, id DESC`,
+    [username, days],
   );
-  const rows = result.rows;
+  return result.rows;
+}
+
+/** Compute yesterday-compliance + streak from pre-loaded rows. Pure. */
+function computeRecentContext(rows: WorkoutRow[], profile: ProfileRow, now: Date): RecentContext {
+  const tz = profile.timezone || 'UTC';
   const { today: todayIso, yesterday: yesterdayIso } = todayAndYesterday(now, tz);
-  const rowIso = (r: WorkoutRow) =>
-    r.workout_date instanceof Date ? r.workout_date.toISOString().slice(0, 10) : String(r.workout_date).slice(0, 10);
-  const yWorkout = rows.find((r) => rowIso(r) === yesterdayIso);
+  const yWorkout = rows.find((r) => rowDateIso(r) === yesterdayIso);
 
   let yesterdayComplianceRatio: number | null = null;
   if (yWorkout && yWorkout.planned_minutes > 0) {
     yesterdayComplianceRatio = yWorkout.completed_minutes / yWorkout.planned_minutes;
   }
 
-  const loggedDates = new Set<string>(rows.map(rowIso));
+  const loggedDates = new Set<string>(rows.map(rowDateIso));
   let cursorIso: string | null = null;
   if (loggedDates.has(todayIso)) cursorIso = todayIso;
   else if (loggedDates.has(yesterdayIso)) cursorIso = yesterdayIso;
@@ -749,14 +710,33 @@ async function loadRecentContext(username: string, profile: ProfileRow, now: Dat
     cursorIso = prev.toISOString().slice(0, 10);
   }
 
-  // For yesterdayWasRest, we want "was yesterday's calendar day a rest day in this tz?"
-  // Build an Instant at yesterday-noon-UTC and let session.ts use the profile tz.
   const yesterdayAt = new Date(yesterdayIso + 'T12:00:00Z');
   return {
     yesterdayComplianceRatio,
     streakDays,
     yesterdayWasRest: wasRestDay(profile, yesterdayAt),
   };
+}
+
+/** Find the most recent same-theme workout strictly before `todayIso`. */
+function findPreviousSameThemeSession(
+  rows: WorkoutRow[],
+  theme: string,
+  todayIso: string,
+): { date: string; completedMinutes: number; plannedMinutes: number } | null {
+  if (theme === 'Rest') return null;
+  // rows are ordered DESC by workout_date — first match is the most recent.
+  for (const r of rows) {
+    if (r.theme !== theme) continue;
+    const d = rowDateIso(r);
+    if (d >= todayIso) continue;
+    return {
+      date: d,
+      completedMinutes: r.completed_minutes,
+      plannedMinutes: r.planned_minutes,
+    };
+  }
+  return null;
 }
 
 function profileToJson(row: ProfileRow): Record<string, unknown> {
