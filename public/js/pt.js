@@ -539,10 +539,18 @@ form.addEventListener('submit', async (e) => {
 (async () => {
   const me = await loadMe();
   if (!me) return;
-  await loadProfile();
-  await loadToday();
-  await loadHistory();
-  await loadSummary();
-  await loadTrend();
-  await loadPreview();
+  // After identity, fire the rest in parallel. loadHistory consumes
+  // logForm.dataset.date (set by loadToday) so it must chain after it;
+  // everything else is independent.
+  const todayThenHistory = (async () => {
+    await loadToday();
+    await loadHistory();
+  })();
+  await Promise.all([
+    loadProfile(),
+    todayThenHistory,
+    loadSummary(),
+    loadTrend(),
+    loadPreview(),
+  ]);
 })();
