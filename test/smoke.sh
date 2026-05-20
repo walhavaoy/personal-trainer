@@ -236,6 +236,10 @@ r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" '{distanceKm: 
 assert "PATCH distanceKm to 6.0 → 200"         200       "$(status_of "$r")"
 assert "distance is now 6"                     6         "$(field ".distanceKm" "$(body_of "$r")")"
 
+# Clean up the extra workout so downstream count-based assertions
+# (lifetime.totalSessions == 1, bulk delete count == 1) still hold.
+remote "$TEST_USER" DELETE "/api/me/workouts/$DIST_WORKOUT_ID" > /dev/null
+
 r=$(remote "$TEST_USER" GET /api/me/lifetime)
 assert "GET /api/me/lifetime → 200"            200       "$(status_of "$r")"
 LIFETIME_KEYS=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(Object.keys(JSON.parse(d)).sort().join(','))}catch{process.stdout.write('')}})")
