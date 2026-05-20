@@ -30,6 +30,7 @@ export interface WeekSummary {
   // current (in-progress) week. UI uses this to show a "Best week so far"
   // milestone when thisWeekMinutes exceeds it.
   bestPriorWeekMinutes: number;
+  bestPriorWeekDistanceKm: number;
 }
 
 /**
@@ -205,22 +206,30 @@ export function computeSummary(
   }
 
   // Best prior week: bucket all workouts (excluding this in-progress week) by
-  // their Monday, sum minutes, take the max. Empty history → 0.
-  const priorByMonday: Map<string, number> = new Map();
+  // their Monday, sum minutes/distance, take the max for each.
+  const priorMinutesByMonday: Map<string, number> = new Map();
+  const priorDistanceByMonday: Map<string, number> = new Map();
   for (const w of workouts) {
     const d = rowDate(w);
     if (d >= weekStartIso) continue; // skip this week
-    // Use string arithmetic to find that workout's Monday — avoids tz drift
-    // because rowDate already lives in calendar-day space.
     const dt = new Date(d + 'T00:00:00Z');
-    const dow = dt.getUTCDay(); // 0=Sun..6=Sat
+    const dow = dt.getUTCDay();
     const offset = (dow + 6) % 7;
     dt.setUTCDate(dt.getUTCDate() - offset);
     const monday = dt.toISOString().slice(0, 10);
-    priorByMonday.set(monday, (priorByMonday.get(monday) ?? 0) + (w.completed_minutes ?? 0));
+    priorMinutesByMonday.set(monday, (priorMinutesByMonday.get(monday) ?? 0) + (w.completed_minutes ?? 0));
+    if (w.distance_km != null) {
+      const n = typeof w.distance_km === 'number' ? w.distance_km : parseFloat(String(w.distance_km));
+      if (Number.isFinite(n)) {
+        priorDistanceByMonday.set(monday, (priorDistanceByMonday.get(monday) ?? 0) + n);
+      }
+    }
   }
-  const bestPriorWeekMinutes = priorByMonday.size > 0
-    ? Math.max(...priorByMonday.values())
+  const bestPriorWeekMinutes = priorMinutesByMonday.size > 0
+    ? Math.max(...priorMinutesByMonday.values())
+    : 0;
+  const bestPriorWeekDistanceKm = priorDistanceByMonday.size > 0
+    ? Math.round(Math.max(...priorDistanceByMonday.values()) * 100) / 100
     : 0;
 
   return {
@@ -239,5 +248,6 @@ export function computeSummary(
     weekOverWeekTrend: trend,
     weekCoachMessage: pickWeekCoachMessage(thisWeekMinutes, lastWeekMinutes, target, trend),
     bestPriorWeekMinutes,
+    bestPriorWeekDistanceKm,
   };
 }

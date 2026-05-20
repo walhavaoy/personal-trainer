@@ -187,6 +187,14 @@ r=$(remote "$REST_USER" POST /api/me/today/rest '{}')
 assert "second rest call → 409"                409       "$(status_of "$r")"
 
 # ── Preview / Trend / Summary / CSV ─────────────────────────────────────────
+section "session lookup by date"
+r=$(remote "$TEST_USER" GET '/api/me/session?date=2026-05-14')
+assert "GET /api/me/session?date=YYYY-MM-DD → 200" 200   "$(status_of "$r")"
+r=$(remote "$TEST_USER" GET '/api/me/session?date=not-a-date')
+assert "bad date format → 400"                 400       "$(status_of "$r")"
+r=$(remote "$TEST_USER" GET /api/me/session)
+assert "missing date → 400"                    400       "$(status_of "$r")"
+
 section "version endpoint"
 r=$(remote "$TEST_USER" GET /api/version)
 assert "GET /api/version → 200"                200       "$(status_of "$r")"

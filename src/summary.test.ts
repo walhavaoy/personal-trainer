@@ -114,6 +114,24 @@ describe('computeSummary', () => {
     assert.equal(s.percentOfTarget, 110);
   });
 
+  it('bestPriorWeekDistanceKm tracks max distance from prior weeks only', () => {
+    const s = computeSummary(profile(), [
+      workout('2026-05-19', 30, 30, 3.0),    // this week: 3 km
+      workout('2026-05-13', 30, 30, 8.0),    // last week: 8 km
+      workout('2026-05-14', 30, 30, 4.0),    // last week + 4 = 12 total
+      workout('2026-05-06', 30, 30, 5.0),    // two weeks: 5 km
+    ], TUE);
+    assert.equal(s.thisWeekDistanceKm, 3);
+    assert.equal(s.bestPriorWeekDistanceKm, 12);
+  });
+
+  it('bestPriorWeekDistanceKm is 0 with no distance history', () => {
+    const s = computeSummary(profile(), [
+      workout('2026-05-19', 30, 30, 5.0),
+    ], TUE);
+    assert.equal(s.bestPriorWeekDistanceKm, 0);
+  });
+
   it('thisWeekDistanceKm sums per-row distance_km only for this week', () => {
     const s = computeSummary(profile(), [
       workout('2026-05-18', 30, 30, 5.0),

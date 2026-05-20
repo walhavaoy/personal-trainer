@@ -495,10 +495,16 @@ async function loadSummary(prefetched) {
   summaryCoach.textContent = s.weekCoachMessage || '';
   summaryCoach.className = 'coach-message coach-message--' + s.weekOverWeekTrend;
 
-  // "Best week so far" milestone — only when we've actually exceeded a real
-  // prior-week max (not just because there's no history yet).
-  if (s.thisWeekMinutes > 0 && s.thisWeekMinutes > s.bestPriorWeekMinutes && s.bestPriorWeekMinutes > 0) {
-    summaryBest.textContent = `Best week so far · +${s.thisWeekMinutes - s.bestPriorWeekMinutes} min over your previous high`;
+  // "Best week so far" milestones — only fire on real prior history.
+  const minutesPB =
+    s.thisWeekMinutes > 0 && s.thisWeekMinutes > s.bestPriorWeekMinutes && s.bestPriorWeekMinutes > 0;
+  const distancePB =
+    s.thisWeekDistanceKm > 0 && s.thisWeekDistanceKm > s.bestPriorWeekDistanceKm && s.bestPriorWeekDistanceKm > 0;
+  if (minutesPB || distancePB) {
+    const parts = [];
+    if (minutesPB) parts.push(`+${s.thisWeekMinutes - s.bestPriorWeekMinutes} min`);
+    if (distancePB) parts.push(`+${Math.round((s.thisWeekDistanceKm - s.bestPriorWeekDistanceKm) * 10) / 10} km`);
+    summaryBest.textContent = `Best week so far · ${parts.join(' & ')} over your previous high`;
     summaryBest.hidden = false;
   } else {
     summaryBest.hidden = true;
