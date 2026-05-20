@@ -717,8 +717,26 @@ async function loadDashboard() {
   }
 }
 
+async function loadVersion() {
+  try {
+    const r = await fetch('/api/version');
+    if (!r.ok) return;
+    const v = await r.json();
+    const footer = document.getElementById('page-footer');
+    if (footer) {
+      const sha = (v.sha && v.sha !== 'unknown') ? v.sha.slice(0, 7) : '';
+      const tag = v.semver || v.version || 'dev';
+      footer.textContent = `pt ${tag}${sha ? ' · ' + sha : ''}`;
+      footer.title = `Built ${v.builtAt || 'unknown'} · branch ${v.branch || 'unknown'} · uptime ${v.uptimeSeconds}s`;
+    }
+  } catch { /* silent — footer is non-critical */ }
+}
+
 (async () => {
   const me = await loadMe();
   if (!me) return;
   await loadDashboard();
+  // Footer doesn't depend on identity but render after dashboard so the page
+  // never blocks on it.
+  loadVersion();
 })();

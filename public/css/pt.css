@@ -101,6 +101,7 @@ form button:hover { filter: brightness(1.1); }
 .onboarding h3 { color: var(--accent); margin-top: 0; }
 .onboarding ol { padding-left: 1.25rem; }
 .onboarding ol li { margin-bottom: 0.4rem; }
+.page-footer { text-align: center; padding: 1rem; font-size: 0.75rem; }
 .best-chip {
   margin-top: 0.6rem;
   padding: 0.5rem 0.75rem;

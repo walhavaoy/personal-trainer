@@ -181,6 +181,11 @@ r=$(remote "$REST_USER" POST /api/me/today/rest '{}')
 assert "second rest call → 409"                409       "$(status_of "$r")"
 
 # ── Preview / Trend / Summary / CSV ─────────────────────────────────────────
+section "version endpoint"
+r=$(remote "$TEST_USER" GET /api/version)
+assert "GET /api/version → 200"                200       "$(status_of "$r")"
+assert "version.component is pt"               pt        "$(field ".component" "$(body_of "$r")")"
+
 section "favicon + manifest"
 r=$(remote "$TEST_USER" GET /favicon.svg)
 assert "GET /favicon.svg → 200"                200       "$(status_of "$r")"

@@ -16,6 +16,19 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const TRUST_FORWARD_AUTH = process.env['TRUST_FORWARD_AUTH'] === 'true';
 
+// Read version.json from the container root (Dockerfile generates it at build).
+// Tolerate missing file by falling back to "dev" sentinel — keeps `tsx watch`
+// dev mode working.
+const VERSION_INFO = (() => {
+  try {
+    const p = path.join(__dirname, '..', 'version.json');
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    return { semver: '0.0.0-dev', version: '0.0.0-dev', sha: 'unknown', branch: 'unknown', builtAt: 'unknown', component: 'pt' };
+  }
+})();
+const STARTED_AT = Date.now();
+
 process.on('unhandledRejection', (reason) => {
   logger.error({ err: reason }, 'Unhandled promise rejection');
 });
@@ -104,6 +117,13 @@ function servePublicFile(filePath: string, res: Response): void {
   res.setHeader('Content-Type', mime);
   res.sendFile(abs);
 }
+
+app.get('/api/version', (_req, res) => {
+  res.json({
+    ...VERSION_INFO,
+    uptimeSeconds: Math.floor((Date.now() - STARTED_AT) / 1000),
+  });
+});
 
 app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
 app.get('/readyz', async (_req, res) => {
