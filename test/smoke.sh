@@ -304,6 +304,20 @@ assert "GET /api/me/dashboard → 200"           200       "$(status_of "$r")"
 KEYS=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(Object.keys(JSON.parse(d)).sort().join(','))}catch{process.stdout.write('')}})")
 assert "dashboard keys are correct"            "lifetime,preview,profile,summary,today,trend,workouts" "$KEYS"
 
+# Consistency: dashboard slices should equal what the individual endpoints
+# return. The shared helpers make drift unlikely, but this catches it.
+DASH_BODY=$(body_of "$r")
+TODAY_BODY=$(body_of "$(remote "$TEST_USER" GET /api/me/today)")
+SUMMARY_BODY=$(body_of "$(remote "$TEST_USER" GET /api/me/summary)")
+PREVIEW_BODY=$(body_of "$(remote "$TEST_USER" GET '/api/me/preview?days=3')")
+
+extract() { echo "$2" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(d)$1 ?? ''))}catch{process.stdout.write('')}})"; }
+
+assert "dashboard.today.theme == /today.theme"     "$(extract '.theme' "$TODAY_BODY")"          "$(extract '.today.theme' "$DASH_BODY")"
+assert "dashboard.summary.thisWeekMinutes matches" "$(extract '.thisWeekMinutes' "$SUMMARY_BODY")" "$(extract '.summary.thisWeekMinutes' "$DASH_BODY")"
+assert "dashboard.preview[0].date matches"         "$(extract '[0].date' "$PREVIEW_BODY")"      "$(extract '.preview[0].date' "$DASH_BODY")"
+assert "dashboard.summary.streakDays matches"      "$(extract '.streakDays' "$SUMMARY_BODY")"   "$(extract '.summary.streakDays' "$DASH_BODY")"
+
 # ── Bulk delete ─────────────────────────────────────────────────────────────
 section "bulk delete + confirmation"
 r=$(remote "$TEST_USER" DELETE /api/me/workouts)
