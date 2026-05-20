@@ -15,6 +15,7 @@ const logForm = document.getElementById('log-form');
 const logStatus = document.getElementById('log-status');
 const logDone = document.getElementById('log-done');
 const restButton = document.getElementById('rest-button');
+const crushButton = document.getElementById('crush-button');
 const historyLoading = document.getElementById('history-loading');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
@@ -649,6 +650,22 @@ historyMore.addEventListener('click', async () => {
     historyMore.textContent = 'Error — try again';
     historyMore.disabled = false;
   }
+});
+
+// "Crushed it": tick every prescribed exercise checkbox, then submit the
+// log form as-is. Saves clicks for the user who did the whole session
+// exactly as prescribed.
+crushButton.addEventListener('click', () => {
+  const boxes = document.querySelectorAll('input[name="exercisesCompleted"]');
+  for (const cb of boxes) cb.checked = true;
+  // Force completedMinutes to the planned total in case the user edited it.
+  const plannedTotal = parseInt(logForm.elements['completedMinutes'].defaultValue, 10);
+  if (Number.isFinite(plannedTotal)) {
+    logForm.elements['completedMinutes'].value = plannedTotal;
+  }
+  // Trigger submit through requestSubmit so the existing handler validates+fires.
+  if (typeof logForm.requestSubmit === 'function') logForm.requestSubmit();
+  else logForm.dispatchEvent(new Event('submit', { cancelable: true }));
 });
 
 restButton.addEventListener('click', async () => {
