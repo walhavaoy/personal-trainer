@@ -305,14 +305,33 @@ app.get('/api/me/workouts', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Unauthenticated' });
     return;
   }
+  // Optional ?before=YYYY-MM-DD returns rows strictly older than that date.
+  // Used by the "Load older" UI to paginate through long histories.
+  const beforeParam = req.query['before'];
+  let before: string | null = null;
+  if (typeof beforeParam === 'string' && beforeParam.length > 0) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(beforeParam)) {
+      res.status(400).json({ error: 'before must be YYYY-MM-DD' });
+      return;
+    }
+    before = beforeParam;
+  }
   try {
-    const result = await pool.query<WorkoutRow>(
-      `SELECT * FROM pt_workout
-        WHERE username = $1
-        ORDER BY workout_date DESC, id DESC
-        LIMIT 30`,
-      [user.username],
-    );
+    const result = before
+      ? await pool.query<WorkoutRow>(
+          `SELECT * FROM pt_workout
+            WHERE username = $1 AND workout_date < $2::date
+            ORDER BY workout_date DESC, id DESC
+            LIMIT 30`,
+          [user.username, before],
+        )
+      : await pool.query<WorkoutRow>(
+          `SELECT * FROM pt_workout
+            WHERE username = $1
+            ORDER BY workout_date DESC, id DESC
+            LIMIT 30`,
+          [user.username],
+        );
     res.json(result.rows.map(workoutToJson));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to list workouts');

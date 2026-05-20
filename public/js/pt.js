@@ -17,6 +17,7 @@ const restButton = document.getElementById('rest-button');
 const historyLoading = document.getElementById('history-loading');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
+const historyMore = document.getElementById('history-more');
 const summaryEl = document.getElementById('summary');
 const summaryMinutes = document.getElementById('summary-minutes');
 const summaryTarget = document.getElementById('summary-target');
@@ -165,11 +166,14 @@ async function loadHistory(prefetched) {
     historyLoading.hidden = true;
     historyEmpty.hidden = false;
     historyList.hidden = true;
+    historyMore.hidden = true;
     return;
   }
   for (const w of workouts) {
     historyList.appendChild(renderHistoryItem(w));
   }
+  // If we got the full page-size of 30, more might exist — offer to load.
+  historyMore.hidden = workouts.length < 30;
   historyLoading.hidden = true;
   historyEmpty.hidden = true;
   historyList.hidden = false;
@@ -474,6 +478,30 @@ resetButton.addEventListener('click', async () => {
   await loadHistory();
   await loadSummary();
   await loadTrend();
+});
+
+historyMore.addEventListener('click', async () => {
+  const items = historyList.querySelectorAll('li[data-id]');
+  const oldest = items[items.length - 1];
+  if (!oldest) return;
+  // Look up the date from the rendered row's title attribute on the date strong.
+  const dateStrong = oldest.querySelector('strong[title]');
+  const oldestDate = dateStrong?.getAttribute('title');
+  if (!oldestDate || !/^\d{4}-\d{2}-\d{2}$/.test(oldestDate)) return;
+  historyMore.disabled = true;
+  historyMore.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/me/workouts?before=' + encodeURIComponent(oldestDate));
+    if (!r.ok) { historyMore.textContent = 'Error — try again'; historyMore.disabled = false; return; }
+    const older = await r.json();
+    for (const w of older) historyList.appendChild(renderHistoryItem(w));
+    historyMore.hidden = older.length < 30;
+    historyMore.disabled = false;
+    historyMore.textContent = 'Load older';
+  } catch {
+    historyMore.textContent = 'Error — try again';
+    historyMore.disabled = false;
+  }
 });
 
 restButton.addEventListener('click', async () => {
