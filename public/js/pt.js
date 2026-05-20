@@ -649,6 +649,10 @@ form.addEventListener('submit', async (e) => {
 // per-section endpoints if the batch one isn't available (e.g. a partial
 // rollback to an older image where /api/me/dashboard doesn't exist yet).
 function renderLifetime(l) {
+  // Show the welcome banner only for true first-time users (no workouts ever).
+  const onboarding = document.getElementById('onboarding');
+  if (onboarding) onboarding.hidden = !l || l.totalSessions > 0;
+
   if (!l || l.totalSessions === 0) {
     summaryLifetime.hidden = true;
     summaryLifetime.textContent = '';

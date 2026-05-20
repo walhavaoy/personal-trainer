@@ -97,6 +97,10 @@ form button:hover { filter: brightness(1.1); }
 .coach-message--flat { border-left-color: var(--muted); }
 .coach-message--new  { border-left-color: var(--muted); }
 .lifetime-footer { margin-top: 0.5rem; font-size: 0.82rem; }
+.onboarding { border-left: 3px solid var(--accent); background: rgba(110, 231, 183, 0.05); }
+.onboarding h3 { color: var(--accent); margin-top: 0; }
+.onboarding ol { padding-left: 1.25rem; }
+.onboarding ol li { margin-bottom: 0.4rem; }
 .best-chip {
   margin-top: 0.6rem;
   padding: 0.5rem 0.75rem;
