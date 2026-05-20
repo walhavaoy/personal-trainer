@@ -65,40 +65,35 @@ async function loadMe() {
   return me;
 }
 
-async function loadProfile() {
-  const r = await fetch('/api/me/profile');
-  if (!r.ok) return null;
-  const p = await r.json();
+function renderProfile(p) {
+  if (!p) return;
   form.elements['goal'].value = p.goal;
   form.elements['fitnessLevel'].value = p.fitnessLevel;
   form.elements['weeklyMinutes'].value = p.weeklyMinutes;
   form.elements['timezone'].value = p.timezone || 'UTC';
+}
 
-  // On first load only, if the profile is still on UTC and the browser knows a
-  // real zone, push it once so the user doesn't have to figure out the field.
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (browserTz && browserTz !== 'UTC' && (p.timezone === 'UTC' || !p.timezone)) {
-    const r2 = await fetch('/api/me/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timezone: browserTz }),
-    });
-    if (r2.ok) {
-      const p2 = await r2.json();
-      form.elements['timezone'].value = p2.timezone;
-      return p2;
-    }
+async function loadProfile(prefetched) {
+  let p = prefetched;
+  if (!p) {
+    const r = await fetch('/api/me/profile');
+    if (!r.ok) return null;
+    p = await r.json();
   }
+  renderProfile(p);
   return p;
 }
 
-async function loadToday() {
-  const r = await fetch('/api/me/today');
-  if (!r.ok) {
-    sessionLoading.textContent = 'Could not load today’s session.';
-    return;
+async function loadToday(prefetched) {
+  let s = prefetched;
+  if (!s) {
+    const r = await fetch('/api/me/today');
+    if (!r.ok) {
+      sessionLoading.textContent = 'Could not load today’s session.';
+      return;
+    }
+    s = await r.json();
   }
-  const s = await r.json();
   sessionDay.textContent = s.dayOfWeek;
   sessionTheme.textContent = s.theme;
   sessionTotal.textContent = s.totalMinutes;
@@ -154,13 +149,16 @@ async function loadToday() {
   logForm.dataset.date = s.date;
 }
 
-async function loadHistory() {
-  const r = await fetch('/api/me/workouts');
-  if (!r.ok) {
-    historyLoading.textContent = 'Could not load history.';
-    return;
+async function loadHistory(prefetched) {
+  let workouts = prefetched;
+  if (!workouts) {
+    const r = await fetch('/api/me/workouts');
+    if (!r.ok) {
+      historyLoading.textContent = 'Could not load history.';
+      return;
+    }
+    workouts = await r.json();
   }
-  const workouts = await r.json();
   historyList.innerHTML = '';
   reflectTodayLogged(workouts);
   if (workouts.length === 0) {
@@ -315,10 +313,13 @@ function beginEditHistoryItem(li, w) {
   });
 }
 
-async function loadTrend() {
-  const r = await fetch('/api/me/trend?weeks=8');
-  if (!r.ok) return;
-  const weeks = await r.json();
+async function loadTrend(prefetched) {
+  let weeks = prefetched;
+  if (!weeks) {
+    const r = await fetch('/api/me/trend?weeks=8');
+    if (!r.ok) return;
+    weeks = await r.json();
+  }
   const svg = document.getElementById('summary-trend-svg');
   svg.innerHTML = '';
   if (weeks.length === 0) return;
@@ -350,10 +351,13 @@ async function loadTrend() {
   });
 }
 
-async function loadPreview() {
-  const r = await fetch('/api/me/preview?days=3');
-  if (!r.ok) return;
-  const items = await r.json();
+async function loadPreview(prefetched) {
+  let items = prefetched;
+  if (!items) {
+    const r = await fetch('/api/me/preview?days=3');
+    if (!r.ok) return;
+    items = await r.json();
+  }
   previewList.innerHTML = '';
   for (const p of items) {
     const li = document.createElement('li');
@@ -376,10 +380,13 @@ async function loadPreview() {
   }
 }
 
-async function loadSummary() {
-  const r = await fetch('/api/me/summary');
-  if (!r.ok) return;
-  const s = await r.json();
+async function loadSummary(prefetched) {
+  let s = prefetched;
+  if (!s) {
+    const r = await fetch('/api/me/summary');
+    if (!r.ok) return;
+    s = await r.json();
+  }
   summaryMinutes.textContent = s.thisWeekMinutes;
   summaryTarget.textContent = s.weeklyTargetMinutes;
   summarySessions.textContent = s.thisWeekSessions;
@@ -536,21 +543,48 @@ form.addEventListener('submit', async (e) => {
   await loadPreview();
 });
 
+// One fetch that returns everything the page needs. Falls back to the
+// per-section endpoints if the batch one isn't available (e.g. a partial
+// rollback to an older image where /api/me/dashboard doesn't exist yet).
+async function loadDashboard() {
+  const r = await fetch('/api/me/dashboard');
+  if (r.status === 404) {
+    // Legacy path: fan out the per-section loaders.
+    const todayThenHistory = (async () => { await loadToday(); await loadHistory(); })();
+    await Promise.all([loadProfile(), todayThenHistory, loadSummary(), loadTrend(), loadPreview()]);
+    return;
+  }
+  if (!r.ok) return;
+  const d = await r.json();
+
+  // Renderers in dependency order: today first (sets logForm.dataset.date),
+  // then history (uses that date for "already logged" detection).
+  await loadProfile(d.profile);
+  await loadToday(d.today);
+  await loadHistory(d.workouts);
+  await loadSummary(d.summary);
+  await loadTrend(d.trend);
+  await loadPreview(d.preview);
+
+  // Profile-on-UTC auto-detect: if the saved tz is UTC but the browser knows a
+  // real zone, push it once. Done here (post-dashboard) instead of inside
+  // loadProfile so it doesn't fire before everything else has rendered.
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (browserTz && browserTz !== 'UTC' && (d.profile.timezone === 'UTC' || !d.profile.timezone)) {
+    const r2 = await fetch('/api/me/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: browserTz }),
+    });
+    if (r2.ok) {
+      const p2 = await r2.json();
+      form.elements['timezone'].value = p2.timezone;
+    }
+  }
+}
+
 (async () => {
   const me = await loadMe();
   if (!me) return;
-  // After identity, fire the rest in parallel. loadHistory consumes
-  // logForm.dataset.date (set by loadToday) so it must chain after it;
-  // everything else is independent.
-  const todayThenHistory = (async () => {
-    await loadToday();
-    await loadHistory();
-  })();
-  await Promise.all([
-    loadProfile(),
-    todayThenHistory,
-    loadSummary(),
-    loadTrend(),
-    loadPreview(),
-  ]);
+  await loadDashboard();
 })();

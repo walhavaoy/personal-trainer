@@ -116,6 +116,76 @@ app.get('/readyz', async (_req, res) => {
 });
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+app.get('/api/me/dashboard', async (req: Request, res: Response) => {
+  // Batch endpoint: returns everything the home page needs in one round trip.
+  // Composition of existing helpers — no new business logic.
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    const profile = await getOrCreateProfile(user);
+    const tz = profile.timezone || 'UTC';
+    const now = new Date();
+
+    // Fetch the workout rows once and reuse for summary, trend, and history.
+    const workoutsResult = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+        WHERE username = $1
+          AND workout_date >= CURRENT_DATE - INTERVAL '70 days'
+        ORDER BY workout_date DESC, id DESC`,
+      [user.username],
+    );
+    const workouts = workoutsResult.rows;
+
+    const ctx = await loadRecentContext(user.username, profile, now);
+    const session = deriveSession(profile, now, ctx);
+
+    // previousSession: most recent same-theme workout before today.
+    const todayIso = calendarDate(now, tz);
+    let previousSession: { date: string; completedMinutes: number; plannedMinutes: number } | null = null;
+    if (session.theme !== 'Rest') {
+      const prev = workouts.find((r) => {
+        const d = r.workout_date instanceof Date
+          ? r.workout_date.toISOString().slice(0, 10)
+          : String(r.workout_date).slice(0, 10);
+        return r.theme === session.theme && d < todayIso;
+      });
+      if (prev) {
+        const d = prev.workout_date instanceof Date
+          ? prev.workout_date.toISOString().slice(0, 10)
+          : String(prev.workout_date).slice(0, 10);
+        previousSession = {
+          date: d,
+          completedMinutes: prev.completed_minutes,
+          plannedMinutes: prev.planned_minutes,
+        };
+      }
+    }
+
+    const previews: Array<{ date: string; dayOfWeek: string; theme: string; totalMinutes: number }> = [];
+    for (let i = 1; i <= 3; i++) {
+      const at = new Date(now.getTime() + i * 24 * 3600 * 1000);
+      const s = deriveSession(profile, at, undefined, 'baseline');
+      previews.push({ date: s.date, dayOfWeek: s.dayOfWeek, theme: s.theme, totalMinutes: s.totalMinutes });
+    }
+
+    res.json({
+      profile: profileToJson(profile),
+      today: { ...session, previousSession },
+      summary: computeSummary(profile, workouts, now),
+      trend: computeTrend(profile, workouts, now, 8),
+      preview: previews,
+      // Cap to 30 like /api/me/workouts does; bigger window of 70 days above is for summary/trend.
+      workouts: workouts.slice(0, 30).map(workoutToJson),
+    });
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to build dashboard');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/me', (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {
