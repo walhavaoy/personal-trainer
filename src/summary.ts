@@ -15,12 +15,14 @@ export interface WeekSummary {
   weeklyTargetMinutes: number;
   thisWeekMinutes: number;
   thisWeekSessions: number;
+  thisWeekDistanceKm: number;     // sum of distance_km across this week's workouts (0 when none)
   percentOfTarget: number;
   streakDays: number;
   lastWorkoutDate: string | null;
   // Week-over-week comparison vs the seven days that ended the day before weekStart.
   lastWeekMinutes: number;
   lastWeekSessions: number;
+  lastWeekDistanceKm: number;
   weekOverWeekDeltaMinutes: number;   // thisWeek - lastWeek (signed)
   weekOverWeekTrend: Trend;
   weekCoachMessage: string;
@@ -161,9 +163,22 @@ export function computeSummary(
 
   const sumMinutes = (rows: WorkoutRow[]): number =>
     rows.reduce((s, w) => s + (w.completed_minutes ?? 0), 0);
+  // pg returns NUMERIC as string; coerce on the fly.
+  const sumDistance = (rows: WorkoutRow[]): number => {
+    let sum = 0;
+    for (const w of rows) {
+      const v = w.distance_km;
+      if (v == null) continue;
+      const n = typeof v === 'number' ? v : parseFloat(v);
+      if (Number.isFinite(n)) sum += n;
+    }
+    return Math.round(sum * 100) / 100;
+  };
 
   const thisWeekMinutes = sumMinutes(inThisWeek);
   const lastWeekMinutes = sumMinutes(inLastWeek);
+  const thisWeekDistanceKm = sumDistance(inThisWeek);
+  const lastWeekDistanceKm = sumDistance(inLastWeek);
   const thisWeekSessions = inThisWeek.length;
   const lastWeekSessions = inLastWeek.length;
 
@@ -213,11 +228,13 @@ export function computeSummary(
     weeklyTargetMinutes: profile.weekly_minutes,
     thisWeekMinutes,
     thisWeekSessions,
+    thisWeekDistanceKm,
     percentOfTarget: percent,
     streakDays: streak,
     lastWorkoutDate: last ? rowDate(last) : null,
     lastWeekMinutes,
     lastWeekSessions,
+    lastWeekDistanceKm,
     weekOverWeekDeltaMinutes: thisWeekMinutes - lastWeekMinutes,
     weekOverWeekTrend: trend,
     weekCoachMessage: pickWeekCoachMessage(thisWeekMinutes, lastWeekMinutes, target, trend),

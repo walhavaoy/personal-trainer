@@ -19,7 +19,7 @@ function profile(p: Partial<ProfileRow> = {}): ProfileRow {
   };
 }
 
-function workout(date: string, completed = 30, planned = 30): WorkoutRow {
+function workout(date: string, completed = 30, planned = 30, distanceKm: number | null = null): WorkoutRow {
   return {
     id: '1',
     username: 'test',
@@ -29,7 +29,7 @@ function workout(date: string, completed = 30, planned = 30): WorkoutRow {
     completed_minutes: completed,
     notes: null,
     exercises_completed: [],
-    distance_km: null,
+    distance_km: distanceKm,
     created_at: new Date(0),
   };
 }
@@ -112,6 +112,27 @@ describe('computeSummary', () => {
       workout('2026-05-18', 50), workout('2026-05-19', 60),
     ], TUE);
     assert.equal(s.percentOfTarget, 110);
+  });
+
+  it('thisWeekDistanceKm sums per-row distance_km only for this week', () => {
+    const s = computeSummary(profile(), [
+      workout('2026-05-18', 30, 30, 5.0),
+      workout('2026-05-19', 30, 30, 3.2),
+      workout('2026-05-17', 30, 30, 99), // last week — ignored
+    ], TUE);
+    assert.equal(s.thisWeekDistanceKm, 8.2);
+    assert.equal(s.lastWeekDistanceKm, 99);
+  });
+
+  it('distance ignores null and treats strings as numbers', () => {
+    const rows = [
+      workout('2026-05-18', 30, 30, null),
+      workout('2026-05-19', 30, 30, 4.5),
+    ];
+    // simulate pg-style NUMERIC-as-string
+    (rows[0] as { distance_km: string | number | null }).distance_km = '2.5';
+    const s = computeSummary(profile(), rows, TUE);
+    assert.equal(s.thisWeekDistanceKm, 7);
   });
 
   it('bestPriorWeekMinutes is the max of prior-week sums, excluding this week', () => {

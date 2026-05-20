@@ -243,8 +243,9 @@ remote "$TEST_USER" DELETE "/api/me/workouts/$DIST_WORKOUT_ID" > /dev/null
 r=$(remote "$TEST_USER" GET /api/me/lifetime)
 assert "GET /api/me/lifetime → 200"            200       "$(status_of "$r")"
 LIFETIME_KEYS=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(Object.keys(JSON.parse(d)).sort().join(','))}catch{process.stdout.write('')}})")
-assert "lifetime keys correct"                 "distinctDaysActive,firstWorkoutDate,lastWorkoutDate,totalMinutes,totalSessions" "$LIFETIME_KEYS"
+assert "lifetime keys correct"                 "distinctDaysActive,firstWorkoutDate,lastWorkoutDate,totalDistanceKm,totalMinutes,totalSessions" "$LIFETIME_KEYS"
 assert "lifetime.totalSessions is 1"           1         "$(field ".totalSessions" "$(body_of "$r")")"
+assert "lifetime.totalDistanceKm is 0"         0         "$(field ".totalDistanceKm" "$(body_of "$r")")"
 
 # ── Theme filter + ?before= pagination ──────────────────────────────────────
 section "history filter + pagination"

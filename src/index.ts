@@ -613,18 +613,17 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
 interface LifetimeStats {
   totalMinutes: number;
   totalSessions: number;
+  totalDistanceKm: number;
   distinctDaysActive: number;
   firstWorkoutDate: string | null;
   lastWorkoutDate: string | null;
 }
 
 async function loadLifetimeStats(username: string): Promise<LifetimeStats> {
-  // Single aggregate query over all rows for the user. Includes 0-minute rest
-  // rows in totalSessions/distinctDays but they contribute 0 to totalMinutes —
-  // matches how trend/summary count rest days.
   const result = await pool.query<{
     total_minutes: string | number;
     total_sessions: string | number;
+    total_distance: string | number | null;
     distinct_days: string | number;
     first_date: Date | string | null;
     last_date: Date | string | null;
@@ -632,6 +631,7 @@ async function loadLifetimeStats(username: string): Promise<LifetimeStats> {
     `SELECT
        COALESCE(SUM(completed_minutes), 0) AS total_minutes,
        COUNT(*)                            AS total_sessions,
+       COALESCE(SUM(distance_km), 0)       AS total_distance,
        COUNT(DISTINCT workout_date)        AS distinct_days,
        MIN(workout_date)                   AS first_date,
        MAX(workout_date)                   AS last_date
@@ -645,6 +645,7 @@ async function loadLifetimeStats(username: string): Promise<LifetimeStats> {
   return {
     totalMinutes: Number(row.total_minutes ?? 0),
     totalSessions: Number(row.total_sessions ?? 0),
+    totalDistanceKm: Math.round(Number(row.total_distance ?? 0) * 100) / 100,
     distinctDaysActive: Number(row.distinct_days ?? 0),
     firstWorkoutDate: isoOrNull(row.first_date),
     lastWorkoutDate: isoOrNull(row.last_date),

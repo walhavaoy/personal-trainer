@@ -422,6 +422,10 @@ async function loadSummary(prefetched) {
   summaryMinutes.textContent = s.thisWeekMinutes;
   summaryTarget.textContent = s.weeklyTargetMinutes;
   summarySessions.textContent = s.thisWeekSessions;
+  // Append distance to the sessions line when present
+  if (s.thisWeekDistanceKm > 0) {
+    summarySessions.textContent = s.thisWeekSessions + ` · ${s.thisWeekDistanceKm} km`;
+  }
   const pct = Math.min(100, s.percentOfTarget);
   summaryBar.style.width = pct + '%';
   summaryBar.classList.toggle('progress-bar--full', s.percentOfTarget >= 100);
@@ -676,7 +680,11 @@ function renderLifetime(l) {
   }
   const sessionsLabel = l.totalSessions === 1 ? 'session' : 'sessions';
   const daysLabel = l.distinctDaysActive === 1 ? 'day' : 'days';
-  let text = `Lifetime: ${l.totalMinutes.toLocaleString()} min · ${l.totalSessions} ${sessionsLabel} · active on ${l.distinctDaysActive} ${daysLabel}`;
+  let text = `Lifetime: ${l.totalMinutes.toLocaleString()} min · ${l.totalSessions} ${sessionsLabel}`;
+  if (l.totalDistanceKm > 0) {
+    text += ` · ${l.totalDistanceKm.toLocaleString()} km`;
+  }
+  text += ` · active on ${l.distinctDaysActive} ${daysLabel}`;
   if (l.firstWorkoutDate) {
     text += ` since ${relativeDate(l.firstWorkoutDate)}`;
   }
