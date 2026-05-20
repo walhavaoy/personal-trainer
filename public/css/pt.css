@@ -120,6 +120,8 @@ form button:hover { filter: brightness(1.1); }
 .link-btn--danger:hover { color: #f5b041; }
 .history-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .history-edit input { padding: 0.25rem 0.4rem; background: #0b0e12; color: var(--fg); border: 1px solid var(--border); border-radius: 3px; font: inherit; }
+.history-edit-exercises { width: 100%; margin-top: 0.5rem; }
+.history-edit-exercises .exercise-list { font-size: 0.88rem; }
 #preview-list { list-style: none; padding: 0; margin: 0; }
 #preview-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
 #preview-list li:last-child { border-bottom: 0; }

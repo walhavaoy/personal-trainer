@@ -306,8 +306,8 @@ function renderHistoryItem(w) {
   return li;
 }
 
-function beginEditHistoryItem(li, w) {
-  // Replace the head with an inline edit form
+async function beginEditHistoryItem(li, w) {
+  // Replace the row with an inline edit form.
   li.innerHTML = '';
   const form = document.createElement('form');
   form.className = 'history-edit';
@@ -319,22 +319,67 @@ function beginEditHistoryItem(li, w) {
     ' <input type="number" name="distanceKm" min="0" max="1000" step="0.1" placeholder="km" style="width:5em" />' +
     ' <input type="text" name="notes" maxlength="500" placeholder="notes" style="width:12em" />' +
     ' <button type="submit" class="link-btn">Save</button>' +
-    ' <button type="button" class="link-btn link-btn--danger" data-cancel>Cancel</button>';
+    ' <button type="button" class="link-btn link-btn--danger" data-cancel>Cancel</button>' +
+    '<div class="history-edit-exercises" data-testid="pt-edit-exercises"></div>';
   form.elements['completedMinutes'].value = w.completedMinutes;
   form.elements['notes'].value = w.notes || '';
   form.elements['distanceKm'].value = (typeof w.distanceKm === 'number') ? w.distanceKm : '';
   li.appendChild(form);
 
+  // Async: fetch the prescription for this row's date so the user can
+  // check/uncheck exercises after-the-fact. Falls back silently on error —
+  // editing minutes/distance/notes still works even if the exercise pane
+  // doesn't render.
+  const exPane = form.querySelector('.history-edit-exercises');
+  try {
+    const r = await fetch('/api/me/session?date=' + encodeURIComponent(w.date));
+    if (r.ok) {
+      const session = await r.json();
+      const prescribed = (session.blocks || []).flatMap((b) => (b.exercises || []).map((e) => e.name));
+      // Server validates against today's prescription for the row's theme;
+      // if the row's stored theme matches session.theme (almost always),
+      // these names are valid.
+      if (prescribed.length > 0) {
+        const current = new Set(Array.isArray(w.exercisesCompleted) ? w.exercisesCompleted : []);
+        const ul = document.createElement('ul');
+        ul.className = 'exercise-list';
+        for (const name of prescribed) {
+          const item = document.createElement('li');
+          const label = document.createElement('label');
+          label.className = 'exercise-row';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.name = 'editExercise';
+          cb.value = name;
+          cb.checked = current.has(name);
+          const span = document.createElement('span');
+          span.textContent = ' ' + name;
+          label.appendChild(cb);
+          label.appendChild(span);
+          item.appendChild(label);
+          ul.appendChild(item);
+        }
+        exPane.appendChild(ul);
+      }
+    }
+  } catch { /* prescription pane is best-effort */ }
+
   form.querySelector('[data-cancel]').addEventListener('click', () => { loadHistory(); });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    // Empty distance string clears the field; numeric → number.
     const distStr = form.elements['distanceKm'].value.trim();
     const payload = {
       completedMinutes: parseInt(form.elements['completedMinutes'].value, 10),
       notes: form.elements['notes'].value || null,
       distanceKm: distStr === '' ? null : parseFloat(distStr),
     };
+    // Only include exercisesCompleted if the prescription pane rendered.
+    const cbs = form.querySelectorAll('input[name="editExercise"]');
+    if (cbs.length > 0) {
+      payload.exercisesCompleted = Array.from(cbs)
+        .filter((cb) => cb.checked)
+        .map((cb) => cb.value);
+    }
     const r = await fetch('/api/me/workouts/' + w.id, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
