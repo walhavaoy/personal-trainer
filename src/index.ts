@@ -441,20 +441,86 @@ app.patch('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Resp
     res.status(400).json({ error: dist.error });
     return;
   }
-  if (completed === undefined && notes === undefined && dist.value === undefined) {
-    res.status(400).json({ error: 'must update at least one of completedMinutes, notes, distanceKm' });
+  // exercisesCompleted: optional string[]. Validation needs the workout's
+  // theme — load it first so we know which prescribed exercise names apply.
+  // Pass null/[] to clear; missing leaves unchanged.
+  const exInput = body['exercisesCompleted'];
+  let exercisesCompleted: string[] | undefined;
+  if (exInput === undefined) {
+    exercisesCompleted = undefined;
+  } else if (exInput === null) {
+    exercisesCompleted = [];
+  } else if (!Array.isArray(exInput)) {
+    res.status(400).json({ error: 'exercisesCompleted must be an array of strings (or null to clear)' });
+    return;
+  } else {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of exInput) {
+      if (typeof v !== 'string') {
+        res.status(400).json({ error: 'exercisesCompleted must be an array of strings' });
+        return;
+      }
+      if (!seen.has(v)) { seen.add(v); out.push(v); }
+    }
+    exercisesCompleted = out;
+  }
+
+  if (completed === undefined && notes === undefined && dist.value === undefined && exercisesCompleted === undefined) {
+    res.status(400).json({ error: 'must update at least one of completedMinutes, notes, distanceKm, exercisesCompleted' });
     return;
   }
 
   try {
+    // If the caller supplied exercise names, validate them against the
+    // currently-prescribed names for the workout's theme + user's current
+    // profile. Load the row first to find its theme.
+    if (exercisesCompleted !== undefined && exercisesCompleted.length > 0) {
+      const existing = await pool.query<{ theme: string }>(
+        `SELECT theme FROM pt_workout WHERE id = $1::bigint AND username = $2`,
+        [id, user.username],
+      );
+      if (existing.rows.length === 0) {
+        res.status(404).json({ error: 'Workout not found' });
+        return;
+      }
+      const theme = existing.rows[0]!.theme;
+      const profile = await getOrCreateProfile(user);
+      // deriveSession is keyed off day-of-week — we need exercises for the
+      // workout's theme regardless of which day that maps to. Easiest reliable
+      // path: derive sessions for each weekday until one matches that theme.
+      let prescribedNames = new Set<string>();
+      for (let i = 0; i < 7; i++) {
+        const probe = new Date(Date.UTC(2026, 0, 4 + i, 12, 0, 0)); // Sun..Sat
+        const s = deriveSession(profile, probe, undefined, 'baseline');
+        if (s.theme === theme) {
+          prescribedNames = new Set(s.blocks.flatMap((b) => (b.exercises ?? []).map((e) => e.name)));
+          break;
+        }
+      }
+      for (const name of exercisesCompleted) {
+        if (!prescribedNames.has(name)) {
+          res.status(400).json({ error: `exercise "${name}" not prescribed for theme "${theme}" at your current level` });
+          return;
+        }
+      }
+    }
+
     const result = await pool.query<WorkoutRow>(
       `UPDATE pt_workout
-          SET completed_minutes = COALESCE($3, completed_minutes),
-              notes             = CASE WHEN $4::bool THEN $5 ELSE notes END,
-              distance_km       = CASE WHEN $6::bool THEN $7 ELSE distance_km END
+          SET completed_minutes   = COALESCE($3, completed_minutes),
+              notes               = CASE WHEN $4::bool THEN $5 ELSE notes END,
+              distance_km         = CASE WHEN $6::bool THEN $7 ELSE distance_km END,
+              exercises_completed = CASE WHEN $8::bool THEN $9::text[] ELSE exercises_completed END
         WHERE id = $1::bigint AND username = $2
         RETURNING *`,
-      [id, user.username, completed ?? null, notes !== undefined, notes, dist.value !== undefined, dist.value ?? null],
+      [
+        id, user.username,
+        completed ?? null,
+        notes !== undefined, notes,
+        dist.value !== undefined, dist.value ?? null,
+        exercisesCompleted !== undefined, exercisesCompleted ?? null,
+      ],
     );
     if (result.rows.length === 0) {
       // 404 (not 403) on someone else's row — don't leak that the id exists.

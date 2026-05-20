@@ -236,6 +236,19 @@ r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" '{distanceKm: 
 assert "PATCH distanceKm to 6.0 → 200"         200       "$(status_of "$r")"
 assert "distance is now 6"                     6         "$(field ".distanceKm" "$(body_of "$r")")"
 
+# PATCH exercisesCompleted: add a prescribed exercise, then clear via null.
+PRESCRIBED2=$(remote "$TEST_USER" GET /api/me/today | cut -f2- | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const s=JSON.parse(d);const ex=(s.blocks||[]).flatMap(b=>(b.exercises||[]).map(e=>e.name));process.stdout.write(ex[0]||'')}catch{process.stdout.write('')}})")
+if [ -n "$PRESCRIBED2" ]; then
+  r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" "{exercisesCompleted:[\"$PRESCRIBED2\"]}")
+  assert "PATCH valid exercisesCompleted → 200" 200      "$(status_of "$r")"
+
+  r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" '{exercisesCompleted:["bench press"]}')
+  assert "PATCH unprescribed exercise → 400"   400       "$(status_of "$r")"
+
+  r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" '{exercisesCompleted:null}')
+  assert "PATCH exercisesCompleted=null → 200" 200       "$(status_of "$r")"
+fi
+
 # Clean up the extra workout so downstream count-based assertions
 # (lifetime.totalSessions == 1, bulk delete count == 1) still hold.
 remote "$TEST_USER" DELETE "/api/me/workouts/$DIST_WORKOUT_ID" > /dev/null
