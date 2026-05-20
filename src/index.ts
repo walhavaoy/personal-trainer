@@ -305,8 +305,9 @@ app.get('/api/me/workouts', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Unauthenticated' });
     return;
   }
-  // Optional ?before=YYYY-MM-DD returns rows strictly older than that date.
-  // Used by the "Load older" UI to paginate through long histories.
+  // Optional ?before=YYYY-MM-DD: rows strictly older than that date.
+  // Optional ?theme=Name: filter to a single theme (composes with before).
+  // Both are used by the history UI to paginate or filter long histories.
   const beforeParam = req.query['before'];
   let before: string | null = null;
   if (typeof beforeParam === 'string' && beforeParam.length > 0) {
@@ -316,22 +317,30 @@ app.get('/api/me/workouts', async (req: Request, res: Response) => {
     }
     before = beforeParam;
   }
+  const themeParam = req.query['theme'];
+  let theme: string | null = null;
+  if (typeof themeParam === 'string' && themeParam.length > 0) {
+    // Allowlist: any string that has shown up as a theme in our THEMES table,
+    // plus 'Rest' (which the rest endpoint uses) and 'Active recovery'.
+    if (!/^[A-Za-z][A-Za-z\- ]{0,30}$/.test(themeParam)) {
+      res.status(400).json({ error: 'theme must be a short alphabetic label' });
+      return;
+    }
+    theme = themeParam;
+  }
   try {
-    const result = before
-      ? await pool.query<WorkoutRow>(
-          `SELECT * FROM pt_workout
-            WHERE username = $1 AND workout_date < $2::date
-            ORDER BY workout_date DESC, id DESC
-            LIMIT 30`,
-          [user.username, before],
-        )
-      : await pool.query<WorkoutRow>(
-          `SELECT * FROM pt_workout
-            WHERE username = $1
-            ORDER BY workout_date DESC, id DESC
-            LIMIT 30`,
-          [user.username],
-        );
+    // Build the query dynamically with positional params.
+    const params: unknown[] = [user.username];
+    let where = `username = $1`;
+    if (before) { params.push(before); where += ` AND workout_date < $${params.length}::date`; }
+    if (theme)  { params.push(theme);  where += ` AND theme = $${params.length}`; }
+    const result = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+        WHERE ${where}
+        ORDER BY workout_date DESC, id DESC
+        LIMIT 30`,
+      params,
+    );
     res.json(result.rows.map(workoutToJson));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to list workouts');

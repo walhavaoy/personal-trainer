@@ -18,6 +18,10 @@ const historyLoading = document.getElementById('history-loading');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
 const historyMore = document.getElementById('history-more');
+const historyFilter = document.getElementById('history-filter');
+
+// Current theme filter, null = show all. Driven by the chip strip.
+let currentThemeFilter = null;
 const summaryEl = document.getElementById('summary');
 const summaryMinutes = document.getElementById('summary-minutes');
 const summaryTarget = document.getElementById('summary-target');
@@ -153,7 +157,8 @@ async function loadToday(prefetched) {
 async function loadHistory(prefetched) {
   let workouts = prefetched;
   if (!workouts) {
-    const r = await fetch('/api/me/workouts');
+    const qs = currentThemeFilter ? '?theme=' + encodeURIComponent(currentThemeFilter) : '';
+    const r = await fetch('/api/me/workouts' + qs);
     if (!r.ok) {
       historyLoading.textContent = 'Could not load history.';
       return;
@@ -162,9 +167,20 @@ async function loadHistory(prefetched) {
   }
   historyList.innerHTML = '';
   reflectTodayLogged(workouts);
+  // Rebuild the theme filter chip strip from the *current* row set when no
+  // filter is applied — that way it stays focused on themes the user actually
+  // trains. When a filter is applied, keep the strip stable (don't rebuild)
+  // so the user can switch back to "All".
+  if (!currentThemeFilter) renderHistoryFilterStrip(workouts);
   if (workouts.length === 0) {
     historyLoading.hidden = true;
-    historyEmpty.hidden = false;
+    historyEmpty.hidden = !currentThemeFilter; // "no workouts" only when unfiltered
+    if (currentThemeFilter) {
+      historyEmpty.hidden = false;
+      historyEmpty.textContent = `No ${currentThemeFilter} sessions yet.`;
+    } else {
+      historyEmpty.textContent = "No workouts logged yet. Complete today's session to start your history.";
+    }
     historyList.hidden = true;
     historyMore.hidden = true;
     return;
@@ -480,6 +496,33 @@ resetButton.addEventListener('click', async () => {
   await loadTrend();
 });
 
+function renderHistoryFilterStrip(workouts) {
+  // Collect distinct themes, ordered by recency of first appearance.
+  const seen = new Set();
+  const order = [];
+  for (const w of workouts) {
+    if (!seen.has(w.theme)) { seen.add(w.theme); order.push(w.theme); }
+  }
+  historyFilter.innerHTML = '';
+  // Only show the strip if there are 2+ themes to choose between.
+  if (order.length < 2) { historyFilter.hidden = true; return; }
+  historyFilter.hidden = false;
+  const makeChip = (label, theme) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip' + (currentThemeFilter === theme ? ' chip--active' : '');
+    btn.textContent = label;
+    btn.dataset.testid = 'pt-chip-theme';
+    btn.addEventListener('click', async () => {
+      currentThemeFilter = theme;
+      await loadHistory();
+    });
+    return btn;
+  };
+  historyFilter.appendChild(makeChip('All', null));
+  for (const t of order) historyFilter.appendChild(makeChip(t, t));
+}
+
 historyMore.addEventListener('click', async () => {
   const items = historyList.querySelectorAll('li[data-id]');
   const oldest = items[items.length - 1];
@@ -491,7 +534,9 @@ historyMore.addEventListener('click', async () => {
   historyMore.disabled = true;
   historyMore.textContent = 'Loading…';
   try {
-    const r = await fetch('/api/me/workouts?before=' + encodeURIComponent(oldestDate));
+    const params = new URLSearchParams({ before: oldestDate });
+    if (currentThemeFilter) params.set('theme', currentThemeFilter);
+    const r = await fetch('/api/me/workouts?' + params.toString());
     if (!r.ok) { historyMore.textContent = 'Error — try again'; historyMore.disabled = false; return; }
     const older = await r.json();
     for (const w of older) historyList.appendChild(renderHistoryItem(w));

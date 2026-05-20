@@ -59,6 +59,9 @@ form button:hover { filter: brightness(1.1); }
 #history-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 #history-list li:last-child { border-bottom: 0; }
 #history-more { margin-top: 0.75rem; }
+.history-filter { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+.history-filter .chip { cursor: pointer; font-size: 0.85rem; }
+.history-filter .chip:hover { color: var(--fg); }
 #summary { margin-top: 1rem; }
 .summary-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; padding: 0.25rem 0; }
 .summary-label { color: var(--muted); }
