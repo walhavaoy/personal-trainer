@@ -186,6 +186,34 @@ app.get('/api/me/profile', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/me/profile/reset', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    await getOrCreateProfile(user); // ensure exists
+    // Reset to the same defaults as the schema CREATE TABLE block, except
+    // for tz which we keep as-is (user already told us their zone).
+    const upd = await pool.query<ProfileRow>(
+      `UPDATE pt_user
+          SET goal           = 'general_fitness',
+              fitness_level  = 'beginner',
+              weekly_minutes = 150,
+              updated_at     = now()
+        WHERE username = $1
+      RETURNING *`,
+      [user.username],
+    );
+    logger.info({ username: user.username }, 'Profile reset to defaults');
+    res.json(profileToJson(upd.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to reset profile');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.put('/api/me/profile', async (req: Request, res: Response) => {
   const user = getUser(req);
   if (!user) {

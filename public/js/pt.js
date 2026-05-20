@@ -10,6 +10,7 @@ const trainerNote = document.getElementById('trainer-note');
 const previousSessionEl = document.getElementById('previous-session');
 const form = document.getElementById('profile-form');
 const profileStatus = document.getElementById('profile-status');
+const profileResetButton = document.getElementById('profile-reset');
 const logForm = document.getElementById('log-form');
 const logStatus = document.getElementById('log-status');
 const logDone = document.getElementById('log-done');
@@ -534,6 +535,22 @@ function renderHistoryFilterStrip(workouts) {
   historyFilter.appendChild(makeChip('All', null));
   for (const t of order) historyFilter.appendChild(makeChip(t, t));
 }
+
+profileResetButton.addEventListener('click', async () => {
+  if (!confirm('Reset profile to defaults (general fitness, beginner, 150 min/week)? Timezone is kept.')) return;
+  profileStatus.textContent = 'Resetting…';
+  const r = await fetch('/api/me/profile/reset', { method: 'POST' });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: 'failed' }));
+    profileStatus.textContent = 'Error: ' + (err.error || 'failed');
+    return;
+  }
+  const p = await r.json();
+  renderProfile(p);
+  profileStatus.textContent = 'Reset.';
+  // Refresh sections that depend on profile (today's session, summary, etc.)
+  await loadDashboard();
+});
 
 historyMore.addEventListener('click', async () => {
   const items = historyList.querySelectorAll('li[data-id]');

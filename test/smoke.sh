@@ -90,6 +90,18 @@ assert "weeklyMinutes out of range → 400"      400       "$(status_of "$r")"
 r=$(remote "$TEST_USER" PUT /api/me/profile '{timezone:"Not/Real"}')
 assert "bad timezone → 400"                    400       "$(status_of "$r")"
 
+# Reset endpoint: after the PUT above set goal=strength/intermediate/240, reset
+# should restore general_fitness/beginner/150 (tz left alone).
+r=$(remote "$TEST_USER" POST /api/me/profile/reset)
+assert "POST /api/me/profile/reset → 200"      200       "$(status_of "$r")"
+assert "reset → goal back to general_fitness"  general_fitness "$(field ".goal" "$(body_of "$r")")"
+assert "reset → fitnessLevel back to beginner" beginner  "$(field ".fitnessLevel" "$(body_of "$r")")"
+assert "reset → weeklyMinutes back to 150"     150       "$(field ".weeklyMinutes" "$(body_of "$r")")"
+
+# Restore the strength/intermediate/240 setup for downstream cases that
+# depend on a real exercise prescription being available.
+remote "$TEST_USER" PUT /api/me/profile '{goal:"strength",fitnessLevel:"intermediate",weeklyMinutes:240}' > /dev/null
+
 # ── Today's session ─────────────────────────────────────────────────────────
 section "today's session"
 r=$(remote "$TEST_USER" GET /api/me/today)
