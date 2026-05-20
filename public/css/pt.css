@@ -96,6 +96,7 @@ form button:hover { filter: brightness(1.1); }
 .coach-message--down { border-left-color: #f5b041; }
 .coach-message--flat { border-left-color: var(--muted); }
 .coach-message--new  { border-left-color: var(--muted); }
+.lifetime-footer { margin-top: 0.5rem; font-size: 0.82rem; }
 .best-chip {
   margin-top: 0.6rem;
   padding: 0.5rem 0.75rem;

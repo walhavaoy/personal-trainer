@@ -145,12 +145,14 @@ app.get('/api/me/dashboard', async (req: Request, res: Response) => {
       previews.push({ date: s.date, dayOfWeek: s.dayOfWeek, theme: s.theme, totalMinutes: s.totalMinutes });
     }
 
+    const lifetime = await loadLifetimeStats(user.username);
     res.json({
       profile: profileToJson(profile),
       today: { ...session, previousSession },
       summary: computeSummary(profile, workouts, now),
       trend: computeTrend(profile, workouts, now, 8),
       preview: previews,
+      lifetime,
       // Cap to 30 like /api/me/workouts does; bigger window of 70 days above is for summary/trend.
       workouts: workouts.slice(0, 30).map(workoutToJson),
     });
@@ -532,6 +534,61 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
     res.status(201).json(workoutToJson(result.rows[0]!));
   } catch (err) {
     logger.error({ err, username: user.username }, 'Failed to log workout');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+interface LifetimeStats {
+  totalMinutes: number;
+  totalSessions: number;
+  distinctDaysActive: number;
+  firstWorkoutDate: string | null;
+  lastWorkoutDate: string | null;
+}
+
+async function loadLifetimeStats(username: string): Promise<LifetimeStats> {
+  // Single aggregate query over all rows for the user. Includes 0-minute rest
+  // rows in totalSessions/distinctDays but they contribute 0 to totalMinutes —
+  // matches how trend/summary count rest days.
+  const result = await pool.query<{
+    total_minutes: string | number;
+    total_sessions: string | number;
+    distinct_days: string | number;
+    first_date: Date | string | null;
+    last_date: Date | string | null;
+  }>(
+    `SELECT
+       COALESCE(SUM(completed_minutes), 0) AS total_minutes,
+       COUNT(*)                            AS total_sessions,
+       COUNT(DISTINCT workout_date)        AS distinct_days,
+       MIN(workout_date)                   AS first_date,
+       MAX(workout_date)                   AS last_date
+     FROM pt_workout
+     WHERE username = $1`,
+    [username],
+  );
+  const row = result.rows[0]!;
+  const isoOrNull = (v: Date | string | null): string | null =>
+    v == null ? null : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+  return {
+    totalMinutes: Number(row.total_minutes ?? 0),
+    totalSessions: Number(row.total_sessions ?? 0),
+    distinctDaysActive: Number(row.distinct_days ?? 0),
+    firstWorkoutDate: isoOrNull(row.first_date),
+    lastWorkoutDate: isoOrNull(row.last_date),
+  };
+}
+
+app.get('/api/me/lifetime', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  try {
+    res.json(await loadLifetimeStats(user.username));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to load lifetime stats');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -182,6 +182,12 @@ assert "GET /workouts.csv → 200"               200       "$(status_of "$r")"
 FIRST_LINE=$(echo "$(body_of "$r")" | head -1)
 assert "CSV header is correct"                 "date,theme,planned_minutes,completed_minutes,exercises_completed,notes" "$FIRST_LINE"
 
+r=$(remote "$TEST_USER" GET /api/me/lifetime)
+assert "GET /api/me/lifetime → 200"            200       "$(status_of "$r")"
+LIFETIME_KEYS=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(Object.keys(JSON.parse(d)).sort().join(','))}catch{process.stdout.write('')}})")
+assert "lifetime keys correct"                 "distinctDaysActive,firstWorkoutDate,lastWorkoutDate,totalMinutes,totalSessions" "$LIFETIME_KEYS"
+assert "lifetime.totalSessions is 1"           1         "$(field ".totalSessions" "$(body_of "$r")")"
+
 # ── Theme filter + ?before= pagination ──────────────────────────────────────
 section "history filter + pagination"
 # Seed 3 backdated workouts for FILT_USER so we have multiple themes.
@@ -216,7 +222,7 @@ section "dashboard batch endpoint"
 r=$(remote "$TEST_USER" GET /api/me/dashboard)
 assert "GET /api/me/dashboard → 200"           200       "$(status_of "$r")"
 KEYS=$(echo "$(body_of "$r")" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{process.stdout.write(Object.keys(JSON.parse(d)).sort().join(','))}catch{process.stdout.write('')}})")
-assert "dashboard keys are correct"            "preview,profile,summary,today,trend,workouts" "$KEYS"
+assert "dashboard keys are correct"            "lifetime,preview,profile,summary,today,trend,workouts" "$KEYS"
 
 # ── Bulk delete ─────────────────────────────────────────────────────────────
 section "bulk delete + confirmation"

@@ -33,6 +33,7 @@ const summaryTrend = document.getElementById('summary-trend');
 const summaryLastWeek = document.getElementById('summary-last-week');
 const summaryCoach = document.getElementById('summary-coach');
 const summaryBest = document.getElementById('summary-best');
+const summaryLifetime = document.getElementById('summary-lifetime');
 const previewList = document.getElementById('preview-list');
 const resetButton = document.getElementById('reset-button');
 const resetStatus = document.getElementById('reset-status');
@@ -630,6 +631,23 @@ form.addEventListener('submit', async (e) => {
 // One fetch that returns everything the page needs. Falls back to the
 // per-section endpoints if the batch one isn't available (e.g. a partial
 // rollback to an older image where /api/me/dashboard doesn't exist yet).
+function renderLifetime(l) {
+  if (!l || l.totalSessions === 0) {
+    summaryLifetime.hidden = true;
+    summaryLifetime.textContent = '';
+    return;
+  }
+  const sessionsLabel = l.totalSessions === 1 ? 'session' : 'sessions';
+  const daysLabel = l.distinctDaysActive === 1 ? 'day' : 'days';
+  let text = `Lifetime: ${l.totalMinutes.toLocaleString()} min · ${l.totalSessions} ${sessionsLabel} · active on ${l.distinctDaysActive} ${daysLabel}`;
+  if (l.firstWorkoutDate) {
+    text += ` since ${relativeDate(l.firstWorkoutDate)}`;
+  }
+  summaryLifetime.textContent = text;
+  summaryLifetime.title = `First workout: ${l.firstWorkoutDate ?? 'n/a'} · Last: ${l.lastWorkoutDate ?? 'n/a'}`;
+  summaryLifetime.hidden = false;
+}
+
 async function loadDashboard() {
   const r = await fetch('/api/me/dashboard');
   if (r.status === 404) {
@@ -649,6 +667,7 @@ async function loadDashboard() {
   await loadSummary(d.summary);
   await loadTrend(d.trend);
   await loadPreview(d.preview);
+  renderLifetime(d.lifetime);
 
   // Profile-on-UTC auto-detect: if the saved tz is UTC but the browser knows a
   // real zone, push it once. Done here (post-dashboard) instead of inside
