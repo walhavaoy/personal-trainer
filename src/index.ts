@@ -268,8 +268,8 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
     res.status(400).json({ error: `fitnessLevel must be one of: ${Array.from(VALID_LEVELS).join(', ')}` });
     return;
   }
-  if (weekly !== undefined && (!Number.isInteger(weekly) || weekly < 0 || weekly > 1500)) {
-    res.status(400).json({ error: 'weeklyMinutes must be an integer between 0 and 1500' });
+  if (weekly !== undefined && (!Number.isInteger(weekly) || weekly < 15 || weekly > 1500)) {
+    res.status(400).json({ error: 'weeklyMinutes must be an integer between 15 and 1500 (at least one short session per week)' });
     return;
   }
   if (timezone !== undefined && !isValidTimezone(timezone)) {

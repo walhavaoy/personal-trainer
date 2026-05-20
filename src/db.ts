@@ -42,6 +42,9 @@ const MIGRATIONS: string[] = [
        ADD COLUMN IF NOT EXISTS exercises_completed TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`,
   `ALTER TABLE pt_user
        ADD COLUMN IF NOT EXISTS display_name TEXT`,
+  // Index for the iter 25 theme filter and iter 18/23 previous-same-theme lookup.
+  `CREATE INDEX IF NOT EXISTS pt_workout_theme_idx
+       ON pt_workout (username, theme, workout_date DESC)`,
 ];
 
 export async function migrate(): Promise<void> {

@@ -85,7 +85,13 @@ r=$(remote "$TEST_USER" PUT /api/me/profile '{goal:"not_a_goal"}')
 assert "bad goal → 400"                        400       "$(status_of "$r")"
 
 r=$(remote "$TEST_USER" PUT /api/me/profile '{weeklyMinutes:99999}')
-assert "weeklyMinutes out of range → 400"      400       "$(status_of "$r")"
+assert "weeklyMinutes too high → 400"          400       "$(status_of "$r")"
+
+r=$(remote "$TEST_USER" PUT /api/me/profile '{weeklyMinutes:0}')
+assert "weeklyMinutes below min → 400"         400       "$(status_of "$r")"
+
+r=$(remote "$TEST_USER" PUT /api/me/profile '{weeklyMinutes:15}')
+assert "weeklyMinutes=15 (the floor) → 200"    200       "$(status_of "$r")"
 
 r=$(remote "$TEST_USER" PUT /api/me/profile '{timezone:"Not/Real"}')
 assert "bad timezone → 400"                    400       "$(status_of "$r")"
