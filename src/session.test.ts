@@ -8,6 +8,7 @@ function profile(p: Partial<ProfileRow> = {}): ProfileRow {
     username: 'test',
     email: null,
     full_name: null,
+    display_name: null,
     goal: 'strength',
     fitness_level: 'intermediate',
     weekly_minutes: 240,

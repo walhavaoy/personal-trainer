@@ -40,6 +40,8 @@ const MIGRATIONS: string[] = [
        ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC'`,
   `ALTER TABLE pt_workout
        ADD COLUMN IF NOT EXISTS exercises_completed TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`,
+  `ALTER TABLE pt_user
+       ADD COLUMN IF NOT EXISTS display_name TEXT`,
 ];
 
 export async function migrate(): Promise<void> {
@@ -53,6 +55,7 @@ export interface ProfileRow {
   username: string;
   email: string | null;
   full_name: string | null;
+  display_name: string | null;
   goal: string;
   fitness_level: string;
   weekly_minutes: number;

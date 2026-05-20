@@ -90,6 +90,15 @@ assert "weeklyMinutes out of range → 400"      400       "$(status_of "$r")"
 r=$(remote "$TEST_USER" PUT /api/me/profile '{timezone:"Not/Real"}')
 assert "bad timezone → 400"                    400       "$(status_of "$r")"
 
+# displayName: set, fetch back, clear.
+r=$(remote "$TEST_USER" PUT /api/me/profile '{displayName:"Alex"}')
+assert "set displayName → 200"                 200       "$(status_of "$r")"
+assert "displayName persisted"                 Alex      "$(field ".displayName" "$(body_of "$r")")"
+
+r=$(remote "$TEST_USER" PUT /api/me/profile '{displayName:null}')
+assert "clear displayName via null → 200"      200       "$(status_of "$r")"
+assert "displayName now null"                  ""        "$(field ".displayName" "$(body_of "$r")")"
+
 # Reset endpoint: after the PUT above set goal=strength/intermediate/240, reset
 # should restore general_fitness/beginner/150 (tz left alone).
 r=$(remote "$TEST_USER" POST /api/me/profile/reset)

@@ -229,6 +229,16 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
   const level = typeof body['fitnessLevel'] === 'string' ? body['fitnessLevel'] : undefined;
   const weekly = typeof body['weeklyMinutes'] === 'number' ? body['weeklyMinutes'] : undefined;
   const timezone = typeof body['timezone'] === 'string' ? body['timezone'] : undefined;
+  // displayName: empty string clears the override; null also clears; missing leaves unchanged.
+  const displayNameInput = body['displayName'];
+  let displayName: string | null | undefined;
+  if (displayNameInput === undefined) displayName = undefined;
+  else if (displayNameInput === null || displayNameInput === '') displayName = null;
+  else if (typeof displayNameInput === 'string' && displayNameInput.length <= 100) displayName = displayNameInput.trim() || null;
+  else {
+    res.status(400).json({ error: 'displayName must be a string ≤100 chars (or null to clear)' });
+    return;
+  }
 
   if (goal !== undefined && !VALID_GOALS.has(goal)) {
     res.status(400).json({ error: `goal must be one of: ${Array.from(VALID_GOALS).join(', ')}` });
@@ -255,10 +265,11 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
               fitness_level  = COALESCE($3, fitness_level),
               weekly_minutes = COALESCE($4, weekly_minutes),
               timezone       = COALESCE($5, timezone),
+              display_name   = CASE WHEN $6::bool THEN $7 ELSE display_name END,
               updated_at     = now()
         WHERE username = $1
       RETURNING *`,
-      [user.username, goal ?? null, level ?? null, weekly ?? null, timezone ?? null],
+      [user.username, goal ?? null, level ?? null, weekly ?? null, timezone ?? null, displayName !== undefined, displayName ?? null],
     );
     res.json(profileToJson(upd.rows[0]!));
   } catch (err) {
@@ -857,6 +868,7 @@ function profileToJson(row: ProfileRow): Record<string, unknown> {
     username: row.username,
     email: row.email,
     fullName: row.full_name,
+    displayName: row.display_name,
     goal: row.goal,
     fitnessLevel: row.fitness_level,
     weeklyMinutes: row.weekly_minutes,

@@ -79,6 +79,11 @@ function renderProfile(p) {
   form.elements['fitnessLevel'].value = p.fitnessLevel;
   form.elements['weeklyMinutes'].value = p.weeklyMinutes;
   form.elements['timezone'].value = p.timezone || 'UTC';
+  form.elements['displayName'].value = p.displayName || '';
+  // Update the greeting if a displayName is set — preferences from profile beat Keycloak's fullName.
+  if (p.displayName) {
+    firstNameEl.textContent = p.displayName.split(/\s+/)[0];
+  }
 }
 
 async function loadProfile(prefetched) {
@@ -632,6 +637,7 @@ form.addEventListener('submit', async (e) => {
     fitnessLevel: form.elements['fitnessLevel'].value,
     weeklyMinutes: parseInt(form.elements['weeklyMinutes'].value, 10) || 0,
     timezone: form.elements['timezone'].value.trim() || 'UTC',
+    displayName: form.elements['displayName'].value.trim() || null,
   };
   const r = await fetch('/api/me/profile', {
     method: 'PUT',
