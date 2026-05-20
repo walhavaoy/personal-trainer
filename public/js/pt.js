@@ -316,19 +316,24 @@ function beginEditHistoryItem(li, w) {
     '<strong>' + w.date + '</strong> · ' + w.theme + ' · ' +
     '<input type="number" name="completedMinutes" min="0" max="1000" required style="width:5em" />' +
     ' / ' + w.plannedMinutes + ' min' +
-    ' <input type="text" name="notes" maxlength="500" placeholder="notes" style="width:14em" />' +
+    ' <input type="number" name="distanceKm" min="0" max="1000" step="0.1" placeholder="km" style="width:5em" />' +
+    ' <input type="text" name="notes" maxlength="500" placeholder="notes" style="width:12em" />' +
     ' <button type="submit" class="link-btn">Save</button>' +
     ' <button type="button" class="link-btn link-btn--danger" data-cancel>Cancel</button>';
   form.elements['completedMinutes'].value = w.completedMinutes;
   form.elements['notes'].value = w.notes || '';
+  form.elements['distanceKm'].value = (typeof w.distanceKm === 'number') ? w.distanceKm : '';
   li.appendChild(form);
 
   form.querySelector('[data-cancel]').addEventListener('click', () => { loadHistory(); });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    // Empty distance string clears the field; numeric → number.
+    const distStr = form.elements['distanceKm'].value.trim();
     const payload = {
       completedMinutes: parseInt(form.elements['completedMinutes'].value, 10),
       notes: form.elements['notes'].value || null,
+      distanceKm: distStr === '' ? null : parseFloat(distStr),
     };
     const r = await fetch('/api/me/workouts/' + w.id, {
       method: 'PATCH',
