@@ -1,6 +1,6 @@
 image:
   repository: localhost:31500/tmpclaw/pt
-  tag: "1779248217"
+  tag: "1779249086"
 imagePullPolicy: Always
 replicas: 1
 
