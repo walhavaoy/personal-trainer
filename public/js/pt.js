@@ -732,6 +732,10 @@ form.addEventListener('submit', async (e) => {
     profileStatus.textContent = 'Error: ' + (err.error || 'failed');
     return;
   }
+  // Re-render the returned profile so the greeting updates if displayName changed.
+  // Falls back gracefully if the response isn't parseable.
+  const updated = await r.json().catch(() => null);
+  if (updated) renderProfile(updated);
   profileStatus.textContent = 'Saved.';
   await loadToday();
   await loadSummary();
