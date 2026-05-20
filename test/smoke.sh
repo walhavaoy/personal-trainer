@@ -181,11 +181,14 @@ r=$(remote "$REST_USER" POST /api/me/today/rest '{}')
 assert "second rest call → 409"                409       "$(status_of "$r")"
 
 # ── Preview / Trend / Summary / CSV ─────────────────────────────────────────
-section "favicon"
+section "favicon + manifest"
 r=$(remote "$TEST_USER" GET /favicon.svg)
 assert "GET /favicon.svg → 200"                200       "$(status_of "$r")"
 r=$(remote "$TEST_USER" GET /favicon.ico)
 assert "GET /favicon.ico → 204 (silenced)"     204       "$(status_of "$r")"
+r=$(remote "$TEST_USER" GET /manifest.webmanifest)
+assert "GET /manifest.webmanifest → 200"       200       "$(status_of "$r")"
+assert "manifest short_name is PT"             PT        "$(field ".short_name" "$(body_of "$r")")"
 
 section "preview, trend, summary, csv"
 r=$(remote "$TEST_USER" GET '/api/me/preview?days=3')

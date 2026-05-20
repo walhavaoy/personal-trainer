@@ -883,6 +883,11 @@ app.get('/favicon.svg', (_req, res) => servePublicFile('favicon.svg', res));
 // Browsers will sometimes request /favicon.ico regardless of <link>; reply
 // with a 204 to silence the noise rather than 404 every time.
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
+app.get('/manifest.webmanifest', (_req, res) => {
+  // The MIME map in servePublicFile doesn't know about .webmanifest; set explicitly.
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  servePublicFile('manifest.webmanifest', res);
+});
 
 app.use('/css', express.static(path.join(PUBLIC_DIR, 'css')));
 app.use('/js', express.static(path.join(PUBLIC_DIR, 'js')));
