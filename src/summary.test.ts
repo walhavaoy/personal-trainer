@@ -25,11 +25,14 @@ function workout(date: string, completed = 30, planned = 30, distanceKm: number 
     username: 'test',
     workout_date: new Date(date + 'T00:00:00Z'),
     theme: 'Pull',
+    kind: 'gym',
+    status: 'completed',
     planned_minutes: planned,
     completed_minutes: completed,
     notes: null,
     exercises_completed: [],
     distance_km: distanceKm,
+    planned_distance_km: null,
     created_at: new Date(0),
   };
 }

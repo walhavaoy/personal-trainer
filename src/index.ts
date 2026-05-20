@@ -1,9 +1,15 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
+import pg from 'pg';
 import pino from 'pino';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pool, migrate, VALID_GOALS, VALID_LEVELS, isValidTimezone, type ProfileRow, type WorkoutRow } from './db.js';
+import {
+  pool, migrate,
+  VALID_GOALS, VALID_LEVELS, VALID_KINDS, CARDIO_KINDS, VALID_STATUSES,
+  isValidTimezone, defaultThemeForKind,
+  type ProfileRow, type WorkoutRow, type GymWorkoutRow, type GymSetRow,
+} from './db.js';
 import { deriveSession, wasRestDay, type RecentContext } from './session.js';
 import { computeSummary, computeTrend } from './summary.js';
 import { calendarDate, todayAndYesterday } from './tz.js';
@@ -166,6 +172,24 @@ app.get('/api/me/dashboard', async (req: Request, res: Response) => {
     }
 
     const lifetime = await loadLifetimeStats(user.username);
+    // Upcoming planned activities (today and future, status=planned).
+    const plannedRows = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout
+         WHERE username = $1
+           AND status = 'planned'
+           AND workout_date >= $2::date
+         ORDER BY workout_date ASC, id ASC LIMIT 14`,
+      [user.username, todayIso],
+    );
+    // Recent gym sessions (last 30 days, completed or planned).
+    const recentGymRows = await pool.query<GymWorkoutRow>(
+      `SELECT * FROM pt_gym_workout
+         WHERE username = $1
+           AND session_date >= CURRENT_DATE - INTERVAL '30 days'
+         ORDER BY session_date DESC, id DESC LIMIT 10`,
+      [user.username],
+    );
+    const gymSets = await loadGymSets(recentGymRows.rows.map((g) => String(g.id)));
     res.json({
       profile: profileToJson(profile),
       today: { ...session, previousSession },
@@ -173,6 +197,8 @@ app.get('/api/me/dashboard', async (req: Request, res: Response) => {
       trend: computeTrend(profile, workouts, now, 8),
       preview: previews,
       lifetime,
+      planned: plannedRows.rows.map(workoutToJson),
+      recentGym: recentGymRows.rows.map((g) => gymWorkoutToJson(g, gymSets.get(String(g.id)) ?? [])),
       // Cap to 30 like /api/me/workouts does; bigger window of 70 days above is for summary/trend.
       workouts: workouts.slice(0, 30).map(workoutToJson),
     });
@@ -878,23 +904,674 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
   }
 });
 
+// ---- New activity (cardio) endpoints ---------------------------------------
+// "Activity" wraps pt_workout but speaks the modern vocabulary: walk / run /
+// cycle, planned vs completed, planned vs actual distance.
+
+interface ActivityInput {
+  kind: string;
+  date: string;
+  status: 'planned' | 'completed';
+  plannedMinutes?: number;
+  plannedDistanceKm?: number | null;
+  completedMinutes?: number;
+  distanceKm?: number | null;
+  notes?: string | null;
+}
+
+function parseActivityInput(raw: Record<string, unknown>): { value?: ActivityInput; error?: string } {
+  const kindRaw = raw['kind'];
+  if (typeof kindRaw !== 'string' || !VALID_KINDS.has(kindRaw)) {
+    return { error: `kind must be one of: ${Array.from(VALID_KINDS).join(', ')}` };
+  }
+  const dateRaw = raw['date'];
+  if (typeof dateRaw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+    return { error: 'date must be YYYY-MM-DD' };
+  }
+  const statusRaw = raw['status'];
+  let status: 'planned' | 'completed' = 'completed';
+  if (statusRaw !== undefined) {
+    if (typeof statusRaw !== 'string' || !VALID_STATUSES.has(statusRaw)) {
+      return { error: `status must be one of: ${Array.from(VALID_STATUSES).join(', ')}` };
+    }
+    status = statusRaw as 'planned' | 'completed';
+  }
+  const intField = (k: string, max = 1000): number | undefined => {
+    const v = raw[k];
+    if (v === undefined) return undefined;
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > max) {
+      throw new Error(`${k} must be an integer 0..${max}`);
+    }
+    return v;
+  };
+  const numField = (k: string): number | null | undefined => {
+    const v = raw[k];
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000) {
+      throw new Error(`${k} must be a number 0..1000 (or null)`);
+    }
+    return Math.round(v * 100) / 100;
+  };
+  let plannedMinutes: number | undefined;
+  let completedMinutes: number | undefined;
+  let plannedDistanceKm: number | null | undefined;
+  let distanceKm: number | null | undefined;
+  try {
+    plannedMinutes = intField('plannedMinutes', 1000);
+    completedMinutes = intField('completedMinutes', 1000);
+    plannedDistanceKm = numField('plannedDistanceKm');
+    distanceKm = numField('distanceKm');
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  let notes: string | null | undefined;
+  const n = raw['notes'];
+  if (n === undefined) notes = undefined;
+  else if (n === null) notes = null;
+  else if (typeof n === 'string' && n.length <= 500) notes = n;
+  else return { error: 'notes must be a string ≤500 chars (or null)' };
+
+  return {
+    value: {
+      kind: kindRaw,
+      date: dateRaw,
+      status,
+      ...(plannedMinutes !== undefined ? { plannedMinutes } : {}),
+      ...(plannedDistanceKm !== undefined ? { plannedDistanceKm } : {}),
+      ...(completedMinutes !== undefined ? { completedMinutes } : {}),
+      ...(distanceKm !== undefined ? { distanceKm } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+    },
+  };
+}
+
+app.post('/api/me/activities', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = parseActivityInput(body);
+  if (parsed.error) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  const a = parsed.value!;
+  try {
+    await getOrCreateProfile(user);
+    const planned = a.plannedMinutes ?? a.completedMinutes ?? 0;
+    const completed = a.status === 'completed' ? (a.completedMinutes ?? planned) : 0;
+    const theme = defaultThemeForKind(a.kind);
+    const result = await pool.query<WorkoutRow>(
+      `INSERT INTO pt_workout
+            (username, workout_date, theme, kind, status,
+             planned_minutes, completed_minutes,
+             planned_distance_km, distance_km, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        user.username, a.date, theme, a.kind, a.status,
+        planned, completed,
+        a.plannedDistanceKm ?? null,
+        a.distanceKm ?? null,
+        a.notes ?? null,
+      ],
+    );
+    logger.info({ username: user.username, kind: a.kind, status: a.status, date: a.date }, 'Activity logged');
+    res.status(201).json(workoutToJson(result.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to create activity');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/me/activities/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ error: 'id must be a positive integer' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const updates: string[] = [];
+  const params: unknown[] = [id, user.username];
+  const push = (col: string, val: unknown): void => {
+    params.push(val);
+    updates.push(`${col} = $${params.length}`);
+  };
+
+  if (body['status'] !== undefined) {
+    const s = body['status'];
+    if (typeof s !== 'string' || !VALID_STATUSES.has(s)) {
+      res.status(400).json({ error: 'status must be planned|completed' });
+      return;
+    }
+    push('status', s);
+  }
+  if (body['completedMinutes'] !== undefined) {
+    const v = body['completedMinutes'];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 1000) {
+      res.status(400).json({ error: 'completedMinutes must be an integer 0..1000' });
+      return;
+    }
+    push('completed_minutes', v);
+  }
+  if (body['plannedMinutes'] !== undefined) {
+    const v = body['plannedMinutes'];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 1000) {
+      res.status(400).json({ error: 'plannedMinutes must be an integer 0..1000' });
+      return;
+    }
+    push('planned_minutes', v);
+  }
+  if (body['distanceKm'] !== undefined) {
+    const v = body['distanceKm'];
+    if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000)) {
+      res.status(400).json({ error: 'distanceKm must be 0..1000 (or null)' });
+      return;
+    }
+    push('distance_km', v === null ? null : Math.round(v * 100) / 100);
+  }
+  if (body['plannedDistanceKm'] !== undefined) {
+    const v = body['plannedDistanceKm'];
+    if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000)) {
+      res.status(400).json({ error: 'plannedDistanceKm must be 0..1000 (or null)' });
+      return;
+    }
+    push('planned_distance_km', v === null ? null : Math.round(v * 100) / 100);
+  }
+  if (body['notes'] !== undefined) {
+    const v = body['notes'];
+    if (v !== null && (typeof v !== 'string' || v.length > 500)) {
+      res.status(400).json({ error: 'notes must be string ≤500 chars (or null)' });
+      return;
+    }
+    push('notes', v);
+  }
+  if (body['date'] !== undefined) {
+    const v = body['date'];
+    if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+      return;
+    }
+    push('workout_date', v);
+  }
+
+  if (updates.length === 0) {
+    res.status(400).json({ error: 'no updatable fields supplied' });
+    return;
+  }
+
+  try {
+    const result = await pool.query<WorkoutRow>(
+      `UPDATE pt_workout SET ${updates.join(', ')}
+         WHERE id = $1::bigint AND username = $2
+         RETURNING *`,
+      params,
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Activity not found' });
+      return;
+    }
+    res.json(workoutToJson(result.rows[0]!));
+  } catch (err) {
+    logger.error({ err, username: user.username, id }, 'Failed to update activity');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/me/activities', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const kindParam = req.query['kind'];
+  const statusParam = req.query['status'];
+  const fromParam = req.query['from'];
+  const toParam = req.query['to'];
+
+  const params: unknown[] = [user.username];
+  let where = 'username = $1';
+  if (typeof kindParam === 'string' && kindParam.length > 0) {
+    if (!VALID_KINDS.has(kindParam) && kindParam !== 'cardio_any') {
+      res.status(400).json({ error: 'kind invalid' });
+      return;
+    }
+    if (kindParam === 'cardio_any') {
+      params.push(Array.from(CARDIO_KINDS));
+      where += ` AND kind = ANY($${params.length}::text[])`;
+    } else {
+      params.push(kindParam);
+      where += ` AND kind = $${params.length}`;
+    }
+  }
+  if (typeof statusParam === 'string' && statusParam.length > 0) {
+    if (!VALID_STATUSES.has(statusParam)) {
+      res.status(400).json({ error: 'status invalid' });
+      return;
+    }
+    params.push(statusParam);
+    where += ` AND status = $${params.length}`;
+  }
+  if (typeof fromParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fromParam)) {
+    params.push(fromParam);
+    where += ` AND workout_date >= $${params.length}::date`;
+  }
+  if (typeof toParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
+    params.push(toParam);
+    where += ` AND workout_date <= $${params.length}::date`;
+  }
+  try {
+    const result = await pool.query<WorkoutRow>(
+      `SELECT * FROM pt_workout WHERE ${where}
+         ORDER BY workout_date DESC, id DESC LIMIT 200`,
+      params,
+    );
+    res.json(result.rows.map(workoutToJson));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to list activities');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Gym workout endpoints (sets / reps / weight) --------------------------
+
+interface GymSetInput { reps: number; weightKg?: number | null; notes?: string | null }
+interface GymExerciseInput { name: string; sets: GymSetInput[] }
+
+function parseGymPayload(raw: Record<string, unknown>):
+  { date?: string; name?: string; notes?: string | null; status?: string; exercises?: GymExerciseInput[]; error?: string } {
+  const out: { date?: string; name?: string; notes?: string | null; status?: string; exercises?: GymExerciseInput[]; error?: string } = {};
+  if (raw['date'] !== undefined) {
+    if (typeof raw['date'] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw['date'])) {
+      out.error = 'date must be YYYY-MM-DD'; return out;
+    }
+    out.date = raw['date'];
+  }
+  if (raw['name'] !== undefined) {
+    if (typeof raw['name'] !== 'string' || raw['name'].length === 0 || raw['name'].length > 100) {
+      out.error = 'name must be 1..100 chars'; return out;
+    }
+    out.name = raw['name'];
+  }
+  if (raw['notes'] !== undefined) {
+    const n = raw['notes'];
+    if (n === null) out.notes = null;
+    else if (typeof n === 'string' && n.length <= 500) out.notes = n;
+    else { out.error = 'notes must be ≤500 chars or null'; return out; }
+  }
+  if (raw['status'] !== undefined) {
+    if (typeof raw['status'] !== 'string' || !VALID_STATUSES.has(raw['status'])) {
+      out.error = 'status must be planned|completed'; return out;
+    }
+    out.status = raw['status'];
+  }
+  if (raw['exercises'] !== undefined) {
+    if (!Array.isArray(raw['exercises'])) { out.error = 'exercises must be an array'; return out; }
+    const exs: GymExerciseInput[] = [];
+    for (const ex of raw['exercises']) {
+      if (!ex || typeof ex !== 'object') { out.error = 'exercise must be object'; return out; }
+      const e = ex as Record<string, unknown>;
+      const n = e['name'];
+      if (typeof n !== 'string' || n.length === 0 || n.length > 100) {
+        out.error = 'exercise.name must be 1..100 chars'; return out;
+      }
+      if (!Array.isArray(e['sets'])) { out.error = 'exercise.sets must be an array'; return out; }
+      const sets: GymSetInput[] = [];
+      for (const s of e['sets']) {
+        if (!s || typeof s !== 'object') { out.error = 'set must be object'; return out; }
+        const sr = s as Record<string, unknown>;
+        const reps = sr['reps'];
+        if (typeof reps !== 'number' || !Number.isInteger(reps) || reps < 0 || reps > 1000) {
+          out.error = 'set.reps must be 0..1000'; return out;
+        }
+        const w = sr['weightKg'];
+        let weightKg: number | null = null;
+        if (w === undefined || w === null) weightKg = null;
+        else if (typeof w === 'number' && Number.isFinite(w) && w >= 0 && w <= 9999) {
+          weightKg = Math.round(w * 100) / 100;
+        } else { out.error = 'set.weightKg must be 0..9999 or null'; return out; }
+        let snotes: string | null = null;
+        if (sr['notes'] === undefined || sr['notes'] === null) snotes = null;
+        else if (typeof sr['notes'] === 'string' && sr['notes'].length <= 200) snotes = sr['notes'];
+        else { out.error = 'set.notes ≤200 chars or null'; return out; }
+        sets.push({ reps, weightKg, notes: snotes });
+      }
+      exs.push({ name: n, sets });
+    }
+    out.exercises = exs;
+  }
+  return out;
+}
+
+async function replaceGymSets(client: pg.PoolClient, gymWorkoutId: string, exercises: GymExerciseInput[]): Promise<void> {
+  await client.query('DELETE FROM pt_gym_set WHERE gym_workout_id = $1::bigint', [gymWorkoutId]);
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i]!;
+    for (let j = 0; j < ex.sets.length; j++) {
+      const s = ex.sets[j]!;
+      await client.query(
+        `INSERT INTO pt_gym_set
+              (gym_workout_id, exercise_name, exercise_order, set_order, reps, weight_kg, notes)
+           VALUES ($1::bigint, $2, $3, $4, $5, $6, $7)`,
+        [gymWorkoutId, ex.name, i, j, s.reps, s.weightKg ?? null, s.notes ?? null],
+      );
+    }
+  }
+}
+
+app.post('/api/me/gym', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = parseGymPayload(body);
+  if (parsed.error) { res.status(400).json({ error: parsed.error }); return; }
+  if (!parsed.date) { res.status(400).json({ error: 'date required' }); return; }
+  const status = parsed.status ?? 'completed';
+  const name = parsed.name ?? 'Gym session';
+  const notes = parsed.notes ?? null;
+  const exercises = parsed.exercises ?? [];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await getOrCreateProfile(user);
+
+    const gymRes = await client.query<GymWorkoutRow>(
+      `INSERT INTO pt_gym_workout (username, session_date, name, notes, status)
+         VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [user.username, parsed.date, name, notes, status],
+    );
+    const gym = gymRes.rows[0]!;
+    await replaceGymSets(client, String(gym.id), exercises);
+
+    // Mirror into pt_workout so summary/streak/trend pick this up automatically.
+    // Estimate minutes: 5 + (3 min per set) — rough but defensible.
+    const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0);
+    const minutes = Math.max(15, 5 + totalSets * 3);
+    const planned = status === 'planned' ? minutes : minutes;
+    const completed = status === 'completed' ? minutes : 0;
+    const wkRes = await client.query<WorkoutRow>(
+      `INSERT INTO pt_workout
+            (username, workout_date, theme, kind, status,
+             planned_minutes, completed_minutes, notes,
+             exercises_completed)
+         VALUES ($1, $2, 'Gym', 'gym', $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [user.username, parsed.date, status, planned, completed, notes,
+       exercises.map((e) => e.name)],
+    );
+    await client.query(
+      'UPDATE pt_gym_workout SET workout_id = $1 WHERE id = $2',
+      [wkRes.rows[0]!.id, gym.id],
+    );
+
+    await client.query('COMMIT');
+    const sets = await loadGymSets([String(gym.id)]);
+    const out = gymWorkoutToJson(
+      { ...gym, workout_id: wkRes.rows[0]!.id as unknown as string },
+      sets.get(String(gym.id)) ?? [],
+    );
+    logger.info({ username: user.username, gymId: gym.id, sets: totalSets }, 'Gym session logged');
+    res.status(201).json(out);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    logger.error({ err, username: user.username }, 'Failed to log gym session');
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch('/api/me/gym/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) { res.status(400).json({ error: 'id must be positive integer' }); return; }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = parseGymPayload(body);
+  if (parsed.error) { res.status(400).json({ error: parsed.error }); return; }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<GymWorkoutRow>(
+      'SELECT * FROM pt_gym_workout WHERE id = $1::bigint AND username = $2',
+      [id, user.username],
+    );
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Gym session not found' });
+      return;
+    }
+    const updates: string[] = [];
+    const params: unknown[] = [id, user.username];
+    const push = (col: string, val: unknown): void => {
+      params.push(val);
+      updates.push(`${col} = $${params.length}`);
+    };
+    if (parsed.date !== undefined) push('session_date', parsed.date);
+    if (parsed.name !== undefined) push('name', parsed.name);
+    if (parsed.notes !== undefined) push('notes', parsed.notes);
+    if (parsed.status !== undefined) push('status', parsed.status);
+    updates.push(`updated_at = now()`);
+
+    const gymRes = await client.query<GymWorkoutRow>(
+      `UPDATE pt_gym_workout SET ${updates.join(', ')}
+         WHERE id = $1::bigint AND username = $2
+         RETURNING *`,
+      params,
+    );
+    if (parsed.exercises !== undefined) {
+      await replaceGymSets(client, id, parsed.exercises);
+    }
+
+    // Sync mirror pt_workout if linked.
+    const gym = gymRes.rows[0]!;
+    if (gym.workout_id) {
+      const exForCount = parsed.exercises;
+      const setsCount = exForCount ? exForCount.reduce((n, e) => n + e.sets.length, 0)
+        : (await client.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM pt_gym_set WHERE gym_workout_id = $1`, [gym.id])).rows[0]!.c;
+      const totalSets = typeof setsCount === 'number' ? setsCount : parseInt(String(setsCount), 10);
+      const minutes = Math.max(15, 5 + totalSets * 3);
+      const completed = gym.status === 'completed' ? minutes : 0;
+      await client.query(
+        `UPDATE pt_workout
+            SET workout_date = $2,
+                status = $3,
+                planned_minutes = $4,
+                completed_minutes = $5,
+                notes = $6,
+                exercises_completed = $7
+          WHERE id = $1::bigint`,
+        [gym.workout_id, gym.session_date, gym.status, minutes, completed, gym.notes ?? null,
+         parsed.exercises ? parsed.exercises.map((e) => e.name) : []],
+      );
+    }
+    await client.query('COMMIT');
+
+    const sets = await loadGymSets([String(gym.id)]);
+    res.json(gymWorkoutToJson(gym, sets.get(String(gym.id)) ?? []));
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    logger.error({ err, username: user.username, id }, 'Failed to update gym session');
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/me/gym/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) { res.status(400).json({ error: 'id must be positive integer' }); return; }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sel = await client.query<{ workout_id: string | null }>(
+      'SELECT workout_id FROM pt_gym_workout WHERE id = $1::bigint AND username = $2',
+      [id, user.username],
+    );
+    if (sel.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Gym session not found' });
+      return;
+    }
+    const wkId = sel.rows[0]!.workout_id;
+    await client.query('DELETE FROM pt_gym_workout WHERE id = $1::bigint AND username = $2', [id, user.username]);
+    if (wkId) {
+      await client.query('DELETE FROM pt_workout WHERE id = $1::bigint AND username = $2', [wkId, user.username]);
+    }
+    await client.query('COMMIT');
+    res.status(204).end();
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    logger.error({ err, username: user.username, id }, 'Failed to delete gym session');
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/me/gym', async (req: Request, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const statusParam = req.query['status'];
+  const params: unknown[] = [user.username];
+  let where = 'username = $1';
+  if (typeof statusParam === 'string' && VALID_STATUSES.has(statusParam)) {
+    params.push(statusParam);
+    where += ` AND status = $${params.length}`;
+  }
+  try {
+    const gyms = await pool.query<GymWorkoutRow>(
+      `SELECT * FROM pt_gym_workout WHERE ${where}
+         ORDER BY session_date DESC, id DESC LIMIT 60`,
+      params,
+    );
+    const sets = await loadGymSets(gyms.rows.map((g) => String(g.id)));
+    res.json(gyms.rows.map((g) => gymWorkoutToJson(g, sets.get(String(g.id)) ?? [])));
+  } catch (err) {
+    logger.error({ err, username: user.username }, 'Failed to list gym sessions');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/me/gym/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
+  const id = req.params.id;
+  if (!/^\d+$/.test(id)) { res.status(400).json({ error: 'id must be positive integer' }); return; }
+  try {
+    const gym = await pool.query<GymWorkoutRow>(
+      'SELECT * FROM pt_gym_workout WHERE id = $1::bigint AND username = $2',
+      [id, user.username],
+    );
+    if (gym.rows.length === 0) { res.status(404).json({ error: 'Gym session not found' }); return; }
+    const sets = await loadGymSets([id]);
+    res.json(gymWorkoutToJson(gym.rows[0]!, sets.get(id) ?? []));
+  } catch (err) {
+    logger.error({ err, username: user.username, id }, 'Failed to load gym session');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 function workoutToJson(row: WorkoutRow): Record<string, unknown> {
   const wd = row.workout_date;
   // pg returns NUMERIC as string by default; coerce to number for the client.
-  const distanceKm = row.distance_km == null ? null
-    : (typeof row.distance_km === 'number' ? row.distance_km : parseFloat(row.distance_km));
+  const toNum = (v: string | number | null): number | null =>
+    v == null ? null : (typeof v === 'number' ? v : parseFloat(v));
   return {
     id: typeof row.id === 'string' ? row.id : String(row.id),
     username: row.username,
     date: wd instanceof Date ? wd.toISOString().slice(0, 10) : String(wd).slice(0, 10),
     theme: row.theme,
+    kind: row.kind ?? null,
+    status: row.status ?? 'completed',
     plannedMinutes: row.planned_minutes,
     completedMinutes: row.completed_minutes,
     notes: row.notes,
     exercisesCompleted: Array.isArray(row.exercises_completed) ? row.exercises_completed : [],
-    distanceKm,
+    distanceKm: toNum(row.distance_km),
+    plannedDistanceKm: toNum(row.planned_distance_km),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   };
+}
+
+function gymWorkoutToJson(row: GymWorkoutRow, sets: GymSetRow[]): Record<string, unknown> {
+  const sd = row.session_date;
+  // Group sets by (exercise_order, exercise_name) preserving DB order.
+  const exMap = new Map<string, { name: string; order: number; sets: Array<{ reps: number; weightKg: number | null; notes: string | null }> }>();
+  for (const s of [...sets].sort((a, b) =>
+    a.exercise_order - b.exercise_order || a.set_order - b.set_order)) {
+    const key = `${s.exercise_order}__${s.exercise_name}`;
+    let ex = exMap.get(key);
+    if (!ex) {
+      ex = { name: s.exercise_name, order: s.exercise_order, sets: [] };
+      exMap.set(key, ex);
+    }
+    const w = s.weight_kg;
+    const weightKg = w == null ? null : (typeof w === 'number' ? w : parseFloat(w));
+    ex.sets.push({ reps: s.reps, weightKg, notes: s.notes });
+  }
+  const exercises = Array.from(exMap.values()).map((e) => ({
+    name: e.name,
+    sets: e.sets,
+  }));
+  return {
+    id: typeof row.id === 'string' ? row.id : String(row.id),
+    workoutId: row.workout_id ?? null,
+    date: sd instanceof Date ? sd.toISOString().slice(0, 10) : String(sd).slice(0, 10),
+    name: row.name,
+    notes: row.notes,
+    status: row.status,
+    exercises,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  };
+}
+
+async function loadGymSets(gymWorkoutIds: string[]): Promise<Map<string, GymSetRow[]>> {
+  const out = new Map<string, GymSetRow[]>();
+  if (gymWorkoutIds.length === 0) return out;
+  const result = await pool.query<GymSetRow>(
+    `SELECT * FROM pt_gym_set
+       WHERE gym_workout_id = ANY($1::bigint[])
+       ORDER BY exercise_order ASC, set_order ASC`,
+    [gymWorkoutIds],
+  );
+  for (const r of result.rows) {
+    const key = String(r.gym_workout_id);
+    let arr = out.get(key);
+    if (!arr) { arr = []; out.set(key, arr); }
+    arr.push(r);
+  }
+  return out;
 }
 
 // Shared validation: optional distanceKm 0..1000 with one decimal place worth of precision.
