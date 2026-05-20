@@ -418,6 +418,10 @@ async function loadSummary(prefetched) {
   summaryBar.classList.toggle('progress-bar--full', s.percentOfTarget >= 100);
   summaryStreak.textContent = s.streakDays + (s.streakDays === 1 ? ' day' : ' days');
   summaryStreak.classList.toggle('chip--active', s.streakDays > 0);
+  // Tab title reflects the streak so users can see status without focusing the tab.
+  document.title = s.streakDays > 0
+    ? `🔥 ${s.streakDays} · Personal Trainer`
+    : 'Personal Trainer';
   summaryLast.textContent = s.lastWorkoutDate ? '· last on ' + s.lastWorkoutDate : '';
 
   const glyph = TREND_GLYPH[s.weekOverWeekTrend] || '·';

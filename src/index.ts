@@ -867,6 +867,10 @@ function profileToJson(row: ProfileRow): Record<string, unknown> {
 }
 
 app.get('/', (_req, res) => servePublicFile('index.html', res));
+app.get('/favicon.svg', (_req, res) => servePublicFile('favicon.svg', res));
+// Browsers will sometimes request /favicon.ico regardless of <link>; reply
+// with a 204 to silence the noise rather than 404 every time.
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
 app.use('/css', express.static(path.join(PUBLIC_DIR, 'css')));
 app.use('/js', express.static(path.join(PUBLIC_DIR, 'js')));
