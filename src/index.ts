@@ -311,17 +311,19 @@ app.get('/api/me/workouts.csv', async (req: Request, res: Response) => {
     );
     const escape = (v: string): string =>
       /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-    const lines = ['date,theme,planned_minutes,completed_minutes,exercises_completed,notes'];
+    const lines = ['date,theme,planned_minutes,completed_minutes,distance_km,exercises_completed,notes'];
     for (const r of result.rows) {
       const date = r.workout_date instanceof Date
         ? r.workout_date.toISOString().slice(0, 10)
         : String(r.workout_date).slice(0, 10);
       const ex = Array.isArray(r.exercises_completed) ? r.exercises_completed.join('; ') : '';
+      const dist = r.distance_km == null ? '' : String(r.distance_km);
       lines.push([
         date,
         escape(r.theme),
         String(r.planned_minutes),
         String(r.completed_minutes),
+        dist,
         escape(ex),
         escape(r.notes ?? ''),
       ].join(','));
@@ -434,8 +436,13 @@ app.patch('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Resp
     res.status(400).json({ error: 'completedMinutes must be an integer between 0 and 1000' });
     return;
   }
-  if (completed === undefined && notes === undefined) {
-    res.status(400).json({ error: 'must update at least one of completedMinutes, notes' });
+  const dist = parseDistanceKm(body['distanceKm']);
+  if (dist.error) {
+    res.status(400).json({ error: dist.error });
+    return;
+  }
+  if (completed === undefined && notes === undefined && dist.value === undefined) {
+    res.status(400).json({ error: 'must update at least one of completedMinutes, notes, distanceKm' });
     return;
   }
 
@@ -443,10 +450,11 @@ app.patch('/api/me/workouts/:id', async (req: Request<{ id: string }>, res: Resp
     const result = await pool.query<WorkoutRow>(
       `UPDATE pt_workout
           SET completed_minutes = COALESCE($3, completed_minutes),
-              notes             = CASE WHEN $4::bool THEN $5 ELSE notes END
+              notes             = CASE WHEN $4::bool THEN $5 ELSE notes END,
+              distance_km       = CASE WHEN $6::bool THEN $7 ELSE distance_km END
         WHERE id = $1::bigint AND username = $2
         RETURNING *`,
-      [id, user.username, completed ?? null, notes !== undefined, notes],
+      [id, user.username, completed ?? null, notes !== undefined, notes, dist.value !== undefined, dist.value ?? null],
     );
     if (result.rows.length === 0) {
       // 404 (not 403) on someone else's row — don't leak that the id exists.
@@ -582,12 +590,17 @@ app.post('/api/me/workouts', async (req: Request, res: Response) => {
       return;
     }
 
+    const dist = parseDistanceKm(body['distanceKm']);
+    if (dist.error) {
+      res.status(400).json({ error: dist.error });
+      return;
+    }
     const result = await pool.query<WorkoutRow>(
       `INSERT INTO pt_workout
-            (username, workout_date, theme, planned_minutes, completed_minutes, notes, exercises_completed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (username, workout_date, theme, planned_minutes, completed_minutes, notes, exercises_completed, distance_km)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [user.username, dateInput, themeInput, session.totalMinutes, completed, notes, exercisesCompleted],
+      [user.username, dateInput, themeInput, session.totalMinutes, completed, notes, exercisesCompleted, dist.value ?? null],
     );
     logger.info({ username: user.username, date: dateInput, completed }, 'Workout logged');
     res.status(201).json(workoutToJson(result.rows[0]!));
@@ -800,6 +813,9 @@ app.get('/api/me/today', async (req: Request, res: Response) => {
 
 function workoutToJson(row: WorkoutRow): Record<string, unknown> {
   const wd = row.workout_date;
+  // pg returns NUMERIC as string by default; coerce to number for the client.
+  const distanceKm = row.distance_km == null ? null
+    : (typeof row.distance_km === 'number' ? row.distance_km : parseFloat(row.distance_km));
   return {
     id: typeof row.id === 'string' ? row.id : String(row.id),
     username: row.username,
@@ -809,8 +825,19 @@ function workoutToJson(row: WorkoutRow): Record<string, unknown> {
     completedMinutes: row.completed_minutes,
     notes: row.notes,
     exercisesCompleted: Array.isArray(row.exercises_completed) ? row.exercises_completed : [],
+    distanceKm,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   };
+}
+
+// Shared validation: optional distanceKm 0..1000 with one decimal place worth of precision.
+function parseDistanceKm(raw: unknown): { value: number | null | undefined; error?: string } {
+  if (raw === undefined) return { value: undefined };
+  if (raw === null) return { value: null };
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > 1000) {
+    return { value: undefined, error: 'distanceKm must be a number 0..1000 (or null to clear)' };
+  }
+  return { value: Math.round(raw * 100) / 100 };
 }
 
 function rowDateIso(r: WorkoutRow): string {

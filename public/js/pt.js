@@ -260,10 +260,14 @@ function renderHistoryItem(w) {
   const exCount = exDone > 0
     ? ' · <span class="muted">' + exDone + ' exercise' + (exDone === 1 ? '' : 's') + '</span>'
     : '';
+  const distLabel = (typeof w.distanceKm === 'number' && w.distanceKm > 0)
+    ? ' · <span class="muted">' + w.distanceKm + ' km</span>'
+    : '';
   // Relative-date label, ISO date in title for unambiguous reference on hover.
   const rel = relativeDate(w.date);
   summary.innerHTML = '<strong title="' + w.date + '">' + rel + '</strong> · ' + w.theme + ' · '
     + '<span class="completed-min">' + w.completedMinutes + '</span>/' + w.plannedMinutes + ' min'
+    + distLabel
     + exCount;
   const actions = document.createElement('span');
   actions.className = 'history-actions';
@@ -606,11 +610,13 @@ logForm.addEventListener('submit', async (e) => {
   logStatus.textContent = 'Saving…';
   const checks = Array.from(document.querySelectorAll('input[name="exercisesCompleted"]:checked'))
     .map((cb) => cb.value);
+  const distStr = logForm.elements['distanceKm'].value.trim();
   const payload = {
     date: logForm.dataset.date,
     completedMinutes: parseInt(logForm.elements['completedMinutes'].value, 10) || 0,
     notes: logForm.elements['notes'].value || undefined,
     exercisesCompleted: checks,
+    ...(distStr === '' ? {} : { distanceKm: parseFloat(distStr) }),
   };
   const r = await fetch('/api/me/workouts', {
     method: 'POST',

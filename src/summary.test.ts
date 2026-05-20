@@ -29,6 +29,7 @@ function workout(date: string, completed = 30, planned = 30): WorkoutRow {
     completed_minutes: completed,
     notes: null,
     exercises_completed: [],
+    distance_km: null,
     created_at: new Date(0),
   };
 }

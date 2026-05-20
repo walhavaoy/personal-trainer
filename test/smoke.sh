@@ -221,7 +221,20 @@ assert "GET /api/me/summary → 200"             200       "$(status_of "$r")"
 r=$(remote "$TEST_USER" GET /api/me/workouts.csv)
 assert "GET /workouts.csv → 200"               200       "$(status_of "$r")"
 FIRST_LINE=$(echo "$(body_of "$r")" | head -1)
-assert "CSV header is correct"                 "date,theme,planned_minutes,completed_minutes,exercises_completed,notes" "$FIRST_LINE"
+assert "CSV header is correct"                 "date,theme,planned_minutes,completed_minutes,distance_km,exercises_completed,notes" "$FIRST_LINE"
+
+# distance_km: log a workout with 5.3 km, fetch back.
+r=$(remote "$TEST_USER" POST /api/me/workouts '{completedMinutes: 25, distanceKm: 5.3}')
+DIST_WORKOUT_ID=$(field ".id" "$(body_of "$r")")
+assert "POST with distanceKm=5.3 → 201"        201       "$(status_of "$r")"
+assert "distanceKm round-trips"                5.3       "$(field ".distanceKm" "$(body_of "$r")")"
+
+r=$(remote "$TEST_USER" POST /api/me/workouts '{completedMinutes: 25, distanceKm: -1}')
+assert "negative distance → 400"               400       "$(status_of "$r")"
+
+r=$(remote "$TEST_USER" PATCH "/api/me/workouts/$DIST_WORKOUT_ID" '{distanceKm: 6.0}')
+assert "PATCH distanceKm to 6.0 → 200"         200       "$(status_of "$r")"
+assert "distance is now 6"                     6         "$(field ".distanceKm" "$(body_of "$r")")"
 
 r=$(remote "$TEST_USER" GET /api/me/lifetime)
 assert "GET /api/me/lifetime → 200"            200       "$(status_of "$r")"

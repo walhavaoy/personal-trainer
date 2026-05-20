@@ -45,6 +45,9 @@ const MIGRATIONS: string[] = [
   // Index for the iter 25 theme filter and iter 18/23 previous-same-theme lookup.
   `CREATE INDEX IF NOT EXISTS pt_workout_theme_idx
        ON pt_workout (username, theme, workout_date DESC)`,
+  // Optional distance in km for cardio sessions (run/walk/bike etc.).
+  `ALTER TABLE pt_workout
+       ADD COLUMN IF NOT EXISTS distance_km NUMERIC(6,2)`,
 ];
 
 export async function migrate(): Promise<void> {
@@ -89,6 +92,7 @@ export interface WorkoutRow {
   completed_minutes: number;
   notes: string | null;
   exercises_completed: string[];
+  distance_km: string | number | null;
   created_at: Date;
 }
 
