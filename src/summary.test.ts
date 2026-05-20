@@ -112,6 +112,24 @@ describe('computeSummary', () => {
     assert.equal(s.percentOfTarget, 110);
   });
 
+  it('bestPriorWeekMinutes is the max of prior-week sums, excluding this week', () => {
+    // This week (Mon 2026-05-18): 30 min total.
+    // Last week (Mon 2026-05-11): 80 min total. ← should win.
+    // Two weeks ago (Mon 2026-05-04): 40 min total.
+    const s = computeSummary(profile(), [
+      workout('2026-05-18', 30),
+      workout('2026-05-13', 40), workout('2026-05-15', 40), // last week: 80
+      workout('2026-05-06', 40),                            // two weeks: 40
+    ], TUE);
+    assert.equal(s.thisWeekMinutes, 30);
+    assert.equal(s.bestPriorWeekMinutes, 80);
+  });
+
+  it('bestPriorWeekMinutes is 0 with no prior workouts', () => {
+    const s = computeSummary(profile(), [workout('2026-05-19', 30)], TUE);
+    assert.equal(s.bestPriorWeekMinutes, 0);
+  });
+
   it('computeTrend returns N weeks oldest-first, including the current week', () => {
     const t = computeTrend(profile(), [
       workout('2026-05-19', 30), // this week

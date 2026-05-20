@@ -24,6 +24,10 @@ export interface WeekSummary {
   weekOverWeekDeltaMinutes: number;   // thisWeek - lastWeek (signed)
   weekOverWeekTrend: Trend;
   weekCoachMessage: string;
+  // Highest weekly total in the 60 days of history we pull, excluding the
+  // current (in-progress) week. UI uses this to show a "Best week so far"
+  // milestone when thisWeekMinutes exceeds it.
+  bestPriorWeekMinutes: number;
 }
 
 /**
@@ -185,6 +189,25 @@ export function computeSummary(
     else trend = delta > 0 ? 'up' : 'down';
   }
 
+  // Best prior week: bucket all workouts (excluding this in-progress week) by
+  // their Monday, sum minutes, take the max. Empty history → 0.
+  const priorByMonday: Map<string, number> = new Map();
+  for (const w of workouts) {
+    const d = rowDate(w);
+    if (d >= weekStartIso) continue; // skip this week
+    // Use string arithmetic to find that workout's Monday — avoids tz drift
+    // because rowDate already lives in calendar-day space.
+    const dt = new Date(d + 'T00:00:00Z');
+    const dow = dt.getUTCDay(); // 0=Sun..6=Sat
+    const offset = (dow + 6) % 7;
+    dt.setUTCDate(dt.getUTCDate() - offset);
+    const monday = dt.toISOString().slice(0, 10);
+    priorByMonday.set(monday, (priorByMonday.get(monday) ?? 0) + (w.completed_minutes ?? 0));
+  }
+  const bestPriorWeekMinutes = priorByMonday.size > 0
+    ? Math.max(...priorByMonday.values())
+    : 0;
+
   return {
     weekStart: weekStartIso,
     weeklyTargetMinutes: profile.weekly_minutes,
@@ -198,5 +221,6 @@ export function computeSummary(
     weekOverWeekDeltaMinutes: thisWeekMinutes - lastWeekMinutes,
     weekOverWeekTrend: trend,
     weekCoachMessage: pickWeekCoachMessage(thisWeekMinutes, lastWeekMinutes, target, trend),
+    bestPriorWeekMinutes,
   };
 }

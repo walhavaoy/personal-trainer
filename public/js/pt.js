@@ -32,6 +32,7 @@ const summaryLast = document.getElementById('summary-last');
 const summaryTrend = document.getElementById('summary-trend');
 const summaryLastWeek = document.getElementById('summary-last-week');
 const summaryCoach = document.getElementById('summary-coach');
+const summaryBest = document.getElementById('summary-best');
 const previewList = document.getElementById('preview-list');
 const resetButton = document.getElementById('reset-button');
 const resetStatus = document.getElementById('reset-status');
@@ -424,6 +425,16 @@ async function loadSummary(prefetched) {
   summaryLastWeek.textContent = `· last week ${s.lastWeekMinutes} min / ${s.lastWeekSessions} session(s)`;
   summaryCoach.textContent = s.weekCoachMessage || '';
   summaryCoach.className = 'coach-message coach-message--' + s.weekOverWeekTrend;
+
+  // "Best week so far" milestone — only when we've actually exceeded a real
+  // prior-week max (not just because there's no history yet).
+  if (s.thisWeekMinutes > 0 && s.thisWeekMinutes > s.bestPriorWeekMinutes && s.bestPriorWeekMinutes > 0) {
+    summaryBest.textContent = `Best week so far · +${s.thisWeekMinutes - s.bestPriorWeekMinutes} min over your previous high`;
+    summaryBest.hidden = false;
+  } else {
+    summaryBest.hidden = true;
+    summaryBest.textContent = '';
+  }
 
   summaryEl.hidden = false;
 }
