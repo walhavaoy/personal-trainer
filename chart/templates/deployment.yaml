@@ -17,7 +17,7 @@ spec:
       labels:
         app: pt
       annotations:
-        tmpclaw.io/version: {{ .Values.image.tag | quote }}
+        app.version: {{ .Values.image.tag | quote }}
     spec:
       securityContext:
         runAsUser: 1000
@@ -74,11 +74,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: product
+  name: pt
   namespace: {{ $ns }}
   labels:
     app: pt
-    tmpclaw.io/realm-product: "true"
 spec:
   selector:
     app: pt

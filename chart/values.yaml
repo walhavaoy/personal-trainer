@@ -1,12 +1,25 @@
 image:
-  repository: localhost:31500/tmpclaw/pt
-  tag: "1779257206"
+  # In-cluster registry pull URL. scripts/deploy.sh pushes here via the
+  # localhost:31500 NodePort and rewrites this tag on each deploy.
+  repository: localhost:31500/personal-trainer/pt
+  tag: "dev"
+
 imagePullPolicy: Always
 replicas: 1
 
-# pt deploys to project-pt so the realm operator's auto-Ingress
-# (created from the ClawRealm CR) can route pt.tmpclaw.io to product:8080.
+# Pt deploys to its own namespace so postgres ingress can be allowed via
+# namespaceSelector. createNamespace is on by default so a fresh install
+# works in one helm command.
 deployNamespace: project-pt
+createNamespace: true
+
+ingress:
+  enabled: true
+  host: pt.tmpclaw.io
+  certResolver: letsencrypt
+  # Keycloak forward-auth + strip-forwarded-user middlewares live in this
+  # shared-infra namespace and are provisioned outside this chart.
+  authMiddlewareNamespace: tmpclaw
 
 postgres:
   host: postgres.tmpclaw.svc.cluster.local
@@ -14,3 +27,12 @@ postgres:
   database: pt
   user: tmpclaw
   password: tmpclaw
+
+# Allow this namespace to reach the postgres pod (which lives in another
+# namespace). Disable if you run pt with its own bundled postgres.
+postgresNetpol:
+  enabled: true
+  # Namespace the postgres pod lives in.
+  targetNamespace: tmpclaw
+  # Pod label to match. Default matches the shared tmpclaw postgres.
+  targetPodLabel: postgres

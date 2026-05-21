@@ -1,9 +1,12 @@
 {{- $ns := .Values.deployNamespace | default .Release.Namespace -}}
-# The realm operator creates a default Ingress that routes pt.tmpclaw.io -> product:8080
-# WITHOUT forward-auth. PT is a private app — every page needs the user identity, so
-# we override with an IngressRoute that matches the whole host at high priority and
-# applies the Keycloak forward-auth middleware. /healthz and /readyz are
-# probed in-cluster (kubelet hits the pod IP directly) so they bypass this entirely.
+{{- if .Values.ingress.enabled }}
+# Private app: every page needs the user identity, so we route the whole host
+# through the Keycloak forward-auth middleware. /healthz and /readyz are probed
+# in-cluster (kubelet hits the pod IP directly) so they bypass this entirely.
+#
+# The forward-auth + strip-forwarded-user middlewares live in the
+# {{ .Values.ingress.authMiddlewareNamespace }} namespace and are provisioned
+# separately (they're shared infra, not pt-specific).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -14,18 +17,19 @@ metadata:
 spec:
   entryPoints: [web, websecure]
   tls:
-    certResolver: letsencrypt
+    certResolver: {{ .Values.ingress.certResolver }}
     domains:
-      - main: pt.tmpclaw.io
+      - main: {{ .Values.ingress.host }}
   routes:
     - kind: Rule
-      match: Host(`pt.tmpclaw.io`)
+      match: Host(`{{ .Values.ingress.host }}`)
       priority: 100
       middlewares:
         - name: strip-forwarded-user
-          namespace: tmpclaw
+          namespace: {{ .Values.ingress.authMiddlewareNamespace }}
         - name: forward-auth
-          namespace: tmpclaw
+          namespace: {{ .Values.ingress.authMiddlewareNamespace }}
       services:
-        - name: product
+        - name: pt
           port: 8080
+{{- end }}

@@ -1,0 +1,30 @@
+{{- if .Values.postgresNetpol.enabled }}
+# Allows pods in pt's namespace to reach the postgres pod, which lives in a
+# different namespace (configured under postgres.host). This NetworkPolicy is
+# applied to the postgres-side namespace, hence the explicit namespace below.
+#
+# Lives in the chart (rather than a side-car manifest) so a clean helm install
+# brings up pt end-to-end. If your cluster locks down cross-namespace netpol
+# RBAC, set postgresNetpol.enabled=false and apply this manually.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pt-to-postgres
+  namespace: {{ .Values.postgresNetpol.targetNamespace }}
+  labels:
+    app: pt
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.postgresNetpol.targetPodLabel }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.deployNamespace | default .Release.Namespace }}
+      ports:
+        - port: {{ .Values.postgres.port }}
+          protocol: TCP
+{{- end }}

@@ -9,13 +9,13 @@ RUN npm run build
 RUN rm -f /product_uuid || true
 
 FROM ${BASE_IMAGE}
-ARG TMPCLAW_VERSION=dev
-ARG TMPCLAW_SHA=unknown
-ARG TMPCLAW_BRANCH=unknown
-LABEL tmpclaw.io/component="pt" \
-      tmpclaw.io/version="${TMPCLAW_VERSION}" \
-      tmpclaw.io/sha="${TMPCLAW_SHA}" \
-      tmpclaw.io/branch="${TMPCLAW_BRANCH}"
+ARG APP_VERSION=dev
+ARG APP_SHA=unknown
+ARG APP_BRANCH=unknown
+LABEL app.component="pt" \
+      app.version="${APP_VERSION}" \
+      app.sha="${APP_SHA}" \
+      app.branch="${APP_BRANCH}"
 WORKDIR /app
 COPY --from=builder /app/package.json /app/package-lock.json ./
 RUN npm ci --omit=dev

@@ -1,0 +1,12 @@
+{{- $ns := .Values.deployNamespace | default .Release.Namespace -}}
+{{- if .Values.createNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    app: pt
+    # Used by the postgres netpol's namespaceSelector to allow ingress from
+    # this namespace into the (separately-deployed) postgres service.
+    kubernetes.io/metadata.name: {{ $ns }}
+{{- end }}
