@@ -2,7 +2,7 @@ image:
   # In-cluster registry pull URL. scripts/deploy.sh pushes here via the
   # localhost:31500 NodePort and rewrites this tag on each deploy.
   repository: localhost:31500/personal-trainer/pt
-  tag: "1779390488"
+  tag: "1779457660"
 
 imagePullPolicy: Always
 replicas: 1
