@@ -13,6 +13,7 @@ function profile(p: Partial<ProfileRow> = {}): ProfileRow {
     fitness_level: 'intermediate',
     weekly_minutes: 240,
     timezone: 'UTC',
+    locale: null,
     created_at: new Date(0),
     updated_at: new Date(0),
     ...p,
@@ -191,6 +192,44 @@ describe('computeSummary', () => {
     assert.equal(t[0]!.totalMinutes, 0);
     // percent based on profile.weekly_minutes (240): 30/240 = 12%
     assert.equal(t[3]!.percentOfTarget, 13); // Math.round(30/240*100) = 13
+  });
+
+  it('weekCoachKey + params: branch coverage', () => {
+    // Each test pins one branch of the coach-message decision tree so the
+    // i18n catalog on the frontend doesn't drift from backend keys.
+    const empty = computeSummary(profile({ weekly_minutes: 150 }), [], TUE);
+    assert.equal(empty.weekCoachKey, 'coach.new.zero');
+    assert.deepEqual(empty.weekCoachParams, {});
+
+    const flat = computeSummary(profile(), [
+      // this week 30, last week 30 → flat
+      workout('2026-05-18', 30, 30), workout('2026-05-12', 30, 30),
+    ], TUE);
+    assert.equal(flat.weekCoachKey, 'coach.flat');
+
+    const upFromZero = computeSummary(profile(), [
+      workout('2026-05-18', 30, 30),
+    ], TUE);
+    assert.equal(upFromZero.weekCoachKey, 'coach.up.from_zero');
+    assert.equal(upFromZero.weekCoachParams['thisWeek'], 30);
+
+    const up = computeSummary(profile(), [
+      workout('2026-05-18', 60, 60), workout('2026-05-12', 30, 30),
+    ], TUE);
+    assert.equal(up.weekCoachKey, 'coach.up');
+    assert.equal(up.weekCoachParams['delta'], 30);
+
+    const downZero = computeSummary(profile(), [
+      workout('2026-05-12', 30, 30),
+    ], TUE);
+    assert.equal(downZero.weekCoachKey, 'coach.down.zero');
+    assert.equal(downZero.weekCoachParams['lastWeek'], 30);
+
+    const down = computeSummary(profile(), [
+      workout('2026-05-18', 10, 30), workout('2026-05-12', 60, 60),
+    ], TUE);
+    assert.equal(down.weekCoachKey, 'coach.down');
+    assert.equal(typeof down.weekCoachParams['pct'], 'number');
   });
 
   it('respects user timezone when picking weekStart', () => {

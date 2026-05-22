@@ -99,6 +99,10 @@ const MIGRATIONS: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS pt_gym_set_workout_idx
        ON pt_gym_set (gym_workout_id, exercise_order, set_order)`,
+  // i18n: user's preferred UI locale. Falls back to browser default if NULL,
+  // which we treat as "unset" so we can auto-detect on first login.
+  `ALTER TABLE pt_user
+       ADD COLUMN IF NOT EXISTS locale TEXT`,
 ];
 
 export async function migrate(): Promise<void> {
@@ -117,9 +121,14 @@ export interface ProfileRow {
   fitness_level: string;
   weekly_minutes: number;
   timezone: string;
+  locale: string | null;
   created_at: Date;
   updated_at: Date;
 }
+
+// Locales the backend recognizes; frontend i18n catalog must cover all of these.
+// Extending here is necessary but not sufficient — also update public/js/i18n.js.
+export const VALID_LOCALES = new Set(['en', 'fi']);
 
 /**
  * IANA timezone validation — Node's Intl throws RangeError for unknown zones.

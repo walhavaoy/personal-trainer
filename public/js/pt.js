@@ -20,8 +20,12 @@
  */
 
 const ICONS = { walk: '🚶', run: '🏃', cycle: '🚴', gym: '🏋️', rest: '🛏️', mobility: '🧘', cardio: '❤️', other: '✨' };
-const LABELS = { walk: 'Walk', run: 'Run', cycle: 'Cycle', gym: 'Gym', rest: 'Rest', mobility: 'Mobility', cardio: 'Cardio', other: 'Activity' };
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
+
+// All user-visible strings go through i18n.t(). Use kindLabel() so a kind
+// without an explicit catalog entry still falls back to the raw key.
+const t = (k, vars) => window.i18n.t(k, vars);
+const kindLabel = (kind) => t('kind.' + (kind || 'other'));
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -38,12 +42,15 @@ function relativeDate(iso) {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
   const todayIso = new Date().toISOString().slice(0, 10);
   const days = Math.round((Date.parse(iso) - Date.parse(todayIso)) / 86400000);
-  if (days === 0) return 'Today';
-  if (days === -1) return 'Yesterday';
-  if (days === 1) return 'Tomorrow';
+  if (days === 0) return t('date.today');
+  if (days === -1) return t('date.yesterday');
+  if (days === 1) return t('date.tomorrow');
+  // Use the current locale for weekday/month formatting so the chrome matches
+  // the chosen UI language (e.g. "ma" / "Mon").
+  const locale = (window.i18n && window.i18n.currentLocale()) || undefined;
   const dt = new Date(iso + 'T12:00:00Z');
-  if (days >= -6 && days <= 6) return dt.toLocaleDateString(undefined, { weekday: 'short' });
-  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (days >= -6 && days <= 6) return dt.toLocaleDateString(locale, { weekday: 'short' });
+  return dt.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 function todayIso() {
@@ -95,7 +102,7 @@ async function loadMe() {
   try {
     const me = await api('/api/me');
     const display = me.fullName || me.username;
-    $('#firstName').textContent = display ? display.split(/\s+/)[0] : 'athlete';
+    $('#firstName').textContent = display ? display.split(/\s+/)[0] : t('app.athlete');
     $('#who').textContent = me.email ? me.email : '';
     return me;
   } catch {
@@ -104,6 +111,17 @@ async function loadMe() {
     return null;
   }
 }
+
+// When the locale changes (user picks a new one), re-render the dashboard's
+// dynamically-built bits so coach/lifetime/labels pick up the new strings.
+document.addEventListener('i18n:change', () => {
+  if (!state.dashboard) return;
+  renderHero(state.dashboard.summary, state.dashboard.lifetime);
+  renderPlanned(state.dashboard.planned || []);
+  renderRecent(state.dashboard.workouts || [], state.dashboard.recentGym || []);
+  if (currentRoute() === 'cardio') renderCardioView();
+  if (currentRoute() === 'gym') renderGymView();
+});
 
 function renderProfile(p) {
   if (!p) return;
@@ -114,8 +132,15 @@ function renderProfile(p) {
   f.elements['weeklyMinutes'].value = p.weeklyMinutes;
   f.elements['timezone'].value = p.timezone || 'UTC';
   f.elements['displayName'].value = p.displayName || '';
+  // Reflect server-side locale in the picker. Falls back to whatever i18n
+  // resolved at boot (browser default) when the profile has no preference yet.
+  const localeSel = f.elements['locale'];
+  if (localeSel) localeSel.value = p.locale || window.i18n.currentLocale();
   if (p.displayName) {
     $('#firstName').textContent = p.displayName.split(/\s+/)[0];
+  } else {
+    // No display name override → use the i18n default "athlete" greeting noun.
+    $('#firstName').textContent = t('app.athlete');
   }
 }
 
@@ -158,7 +183,7 @@ function renderHero(s, lifetime) {
   $('#summary-bar').style.width = pct + '%';
   $('#summary-bar').classList.toggle('progress-bar--full', s.percentOfTarget >= 100);
   $('#summary-streak-days').textContent = s.streakDays;
-  $('#summary-streak-unit').textContent = s.streakDays === 1 ? 'day' : 'days';
+  $('#summary-streak-unit').textContent = t(s.streakDays === 1 ? 'dashboard.hero.day' : 'dashboard.hero.days');
   document.title = s.streakDays > 0 ? `🔥 ${s.streakDays} · Personal Trainer` : 'Personal Trainer';
   const flameWrap = $('#summary-streak-icon').parentElement;
   flameWrap.classList.toggle('streak-active', s.streakDays > 0);
@@ -166,13 +191,18 @@ function renderHero(s, lifetime) {
   const glyph = TREND_GLYPH[s.weekOverWeekTrend] || '·';
   const sign = s.weekOverWeekDeltaMinutes > 0 ? '+' : '';
   $('#summary-trend').textContent = `${glyph} ${sign}${s.weekOverWeekDeltaMinutes} min`;
-  $('#summary-last-week').textContent = `vs ${s.lastWeekMinutes} last`;
+  $('#summary-last-week').textContent = t('dashboard.hero.vsLast', { n: s.lastWeekMinutes });
   const pill = $('#summary-trend-pill');
   pill.classList.remove('hero-pill--up', 'hero-pill--down', 'hero-pill--flat', 'hero-pill--new');
   pill.classList.add('hero-pill--' + s.weekOverWeekTrend);
 
   const coach = $('#summary-coach');
-  coach.textContent = s.weekCoachMessage || '';
+  // Prefer the backend's i18n key + params so the line follows the user's
+  // chosen language. Falls back to the English-rendered message when older
+  // backends don't ship a key.
+  coach.textContent = s.weekCoachKey
+    ? t(s.weekCoachKey, s.weekCoachParams || {})
+    : (s.weekCoachMessage || '');
   coach.classList.remove('hero-coach--up', 'hero-coach--down');
   if (s.weekOverWeekTrend === 'up') coach.classList.add('hero-coach--up');
   if (s.weekOverWeekTrend === 'down') coach.classList.add('hero-coach--down');
@@ -192,8 +222,14 @@ function renderHero(s, lifetime) {
 
   if (lifetime && lifetime.totalSessions > 0) {
     const sl = $('#summary-lifetime');
-    const sessionsLabel = lifetime.totalSessions === 1 ? 'session' : 'sessions';
-    let text = `Lifetime · ${lifetime.totalMinutes.toLocaleString()} min · ${lifetime.totalSessions} ${sessionsLabel}`;
+    const sessionsLabel = t(lifetime.totalSessions === 1
+      ? 'dashboard.lifetime.session'
+      : 'dashboard.lifetime.sessions');
+    let text = t('dashboard.lifetime', {
+      minutes: lifetime.totalMinutes.toLocaleString(),
+      sessions: lifetime.totalSessions,
+      sessionsLabel,
+    });
     if (lifetime.totalDistanceKm > 0) text += ` · ${lifetime.totalDistanceKm.toLocaleString()} km`;
     sl.textContent = text;
     sl.hidden = false;
@@ -301,7 +337,7 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
   const mins = a.status === 'planned'
     ? (a.plannedMinutes ? ` · ${a.plannedMinutes} min` : '')
     : ` · ${a.completedMinutes}/${a.plannedMinutes} min`;
-  title.innerHTML = `<strong>${LABELS[kind] || a.theme}</strong>${dist}${mins}`;
+  title.innerHTML = `<strong>${escapeHtml(kindLabel(kind) || a.theme)}</strong>${dist}${mins}`;
   const sub = document.createElement('div');
   sub.className = 'activity-item__sub';
   sub.textContent = relativeDate(a.date) + (a.notes ? ' · ' + a.notes : '');
@@ -313,7 +349,7 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
   if (a.status === 'planned') {
     const tag = document.createElement('span');
     tag.className = 'activity-status activity-status--planned';
-    tag.textContent = 'Planned';
+    tag.textContent = t('activity.planned');
     li.appendChild(tag);
   }
 
@@ -324,7 +360,7 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
       const done = document.createElement('button');
       done.type = 'button';
       done.className = 'link-btn link-btn--accent';
-      done.textContent = 'Mark done';
+      done.textContent = t('activity.markDone');
       done.dataset.testid = 'pt-button-mark-done';
       done.addEventListener('click', async () => {
         try {
@@ -344,10 +380,10 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'link-btn link-btn--danger';
-    del.textContent = 'Delete';
+    del.textContent = t('activity.delete');
     del.dataset.testid = 'pt-button-delete';
     del.addEventListener('click', async () => {
-      if (!confirm(`Delete ${LABELS[kind]} from ${a.date}?`)) return;
+      if (!confirm(t('activity.confirm.delete', { kind: kindLabel(kind), date: a.date }))) return;
       try {
         await api('/api/me/workouts/' + a.id, { method: 'DELETE' });
         await loadDashboard();
@@ -373,7 +409,7 @@ function renderGymRecentItem(g) {
   const title = document.createElement('div');
   title.className = 'activity-item__title';
   const setsCount = g.exercises.reduce((n, e) => n + e.sets.length, 0);
-  title.innerHTML = `<strong>${escapeHtml(g.name)}</strong> · ${g.exercises.length} exercises · ${setsCount} sets`;
+  title.innerHTML = `<strong>${escapeHtml(g.name)}</strong> · ${escapeHtml(t('gym.shortLine', { count: g.exercises.length, sets: setsCount }))}`;
   const sub = document.createElement('div');
   sub.className = 'activity-item__sub';
   sub.textContent = relativeDate(g.date) + (g.notes ? ' · ' + g.notes : '');
@@ -472,7 +508,7 @@ function renderGymItem(g) {
   const meta = document.createElement('div');
   meta.className = 'gym-item__meta';
   const setsCount = g.exercises.reduce((n, e) => n + e.sets.length, 0);
-  meta.textContent = `${relativeDate(g.date)} · ${g.exercises.length} exercises · ${setsCount} sets`;
+  meta.textContent = t('gym.sessionLine', { date: relativeDate(g.date), count: g.exercises.length, sets: setsCount });
   head.appendChild(title);
   head.appendChild(meta);
   li.appendChild(head);
@@ -480,7 +516,7 @@ function renderGymItem(g) {
   if (g.status === 'planned') {
     const tag = document.createElement('span');
     tag.className = 'activity-status activity-status--planned';
-    tag.textContent = 'Planned';
+    tag.textContent = t('activity.planned');
     head.appendChild(tag);
   }
 
@@ -511,22 +547,22 @@ function renderGymItem(g) {
   const editBtn = document.createElement('button');
   editBtn.type = 'button';
   editBtn.className = 'link-btn link-btn--accent';
-  editBtn.textContent = 'Edit';
+  editBtn.textContent = t('activity.edit');
   editBtn.dataset.testid = 'pt-button-edit-gym';
   editBtn.addEventListener('click', () => openGymSheet(g));
   const repeatBtn = document.createElement('button');
   repeatBtn.type = 'button';
   repeatBtn.className = 'link-btn';
-  repeatBtn.textContent = 'Repeat';
+  repeatBtn.textContent = t('activity.repeat');
   repeatBtn.dataset.testid = 'pt-button-repeat-gym';
   repeatBtn.addEventListener('click', () => openGymSheet({ ...g, id: null, date: todayIso(), status: 'completed' }));
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
   delBtn.className = 'link-btn link-btn--danger';
-  delBtn.textContent = 'Delete';
+  delBtn.textContent = t('activity.delete');
   delBtn.dataset.testid = 'pt-button-delete-gym';
   delBtn.addEventListener('click', async () => {
-    if (!confirm(`Delete "${g.name}" from ${g.date}?`)) return;
+    if (!confirm(t('gym.confirm.delete', { name: g.name, date: g.date }))) return;
     try {
       await api('/api/me/gym/' + g.id, { method: 'DELETE' });
       await loadDashboard();
@@ -557,6 +593,9 @@ function openSheet(title, contentNode) {
   const body = $('#sheet-body');
   body.innerHTML = '';
   body.appendChild(contentNode);
+  // Localize the freshly-inserted template subtree so static text + placeholders
+  // pick up the active locale before the sheet animates in.
+  window.i18n.applyDom(body);
   const sheet = $('#sheet');
   sheet.hidden = false;
   sheet.setAttribute('aria-hidden', 'false');
@@ -602,21 +641,21 @@ function openCardioSheet(kindHint) {
       if (Number.isFinite(distance) && distance > 0) payload.distanceKm = distance;
     }
     const status$ = form.querySelector('[data-status]');
-    status$.textContent = 'Saving…';
+    status$.textContent = t('sheet.saving');
     status$.classList.remove('sheet-status--err', 'sheet-status--ok');
     try {
       await api('/api/me/activities', { method: 'POST', body: JSON.stringify(payload) });
-      status$.textContent = 'Saved.';
+      status$.textContent = t('sheet.saved');
       status$.classList.add('sheet-status--ok');
       await loadDashboard();
       if (currentRoute() === 'cardio') await renderCardioView();
       closeSheet();
     } catch (e) {
-      status$.textContent = 'Error: ' + e.message;
+      status$.textContent = t('sheet.error', { msg: e.message });
       status$.classList.add('sheet-status--err');
     }
   });
-  openSheet('Plan cardio', tpl);
+  openSheet(t('sheet.cardio.title'), tpl);
 }
 
 /* ---------- Gym sheet ---------- */
@@ -700,7 +739,7 @@ function openGymSheet(existing) {
       exercises.push({ name: exName, sets });
     }
     const status$ = form.querySelector('[data-status]');
-    status$.textContent = 'Saving…';
+    status$.textContent = t('sheet.saving');
     status$.classList.remove('sheet-status--err', 'sheet-status--ok');
     try {
       const payload = { date, name, notes, status, exercises };
@@ -709,18 +748,18 @@ function openGymSheet(existing) {
       } else {
         await api('/api/me/gym', { method: 'POST', body: JSON.stringify(payload) });
       }
-      status$.textContent = 'Saved.';
+      status$.textContent = t('sheet.saved');
       status$.classList.add('sheet-status--ok');
       await loadDashboard();
       if (currentRoute() === 'gym') await renderGymView();
       closeSheet();
     } catch (e) {
-      status$.textContent = 'Error: ' + e.message;
+      status$.textContent = t('sheet.error', { msg: e.message });
       status$.classList.add('sheet-status--err');
     }
   });
 
-  openSheet(isEdit ? 'Edit gym session' : 'New gym session', tpl);
+  openSheet(t(isEdit ? 'sheet.gym.title.edit' : 'sheet.gym.title.new'), tpl);
 }
 
 /* ---------- Action wiring ---------- */
@@ -738,46 +777,53 @@ document.addEventListener('click', (e) => {
 $('#profile-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.currentTarget;
+  const localeSel = f.elements['locale'];
   const payload = {
     goal: f.elements['goal'].value,
     fitnessLevel: f.elements['fitnessLevel'].value,
     weeklyMinutes: parseInt(f.elements['weeklyMinutes'].value, 10) || 0,
     timezone: f.elements['timezone'].value.trim() || 'UTC',
     displayName: f.elements['displayName'].value.trim() || null,
+    ...(localeSel ? { locale: localeSel.value } : {}),
   };
   const status = $('#profile-status');
-  status.textContent = 'Saving…';
+  status.textContent = t('sheet.saving');
   try {
     const updated = await api('/api/me/profile', { method: 'PUT', body: JSON.stringify(payload) });
     renderProfile(updated);
-    status.textContent = 'Saved.';
+    // Apply the (possibly new) locale immediately — re-renders static DOM and
+    // the dashboard pieces below get the new wording on their next paint.
+    if (updated.locale && updated.locale !== window.i18n.currentLocale()) {
+      window.i18n.setLocale(updated.locale);
+    }
+    status.textContent = t('me.saved');
     await loadDashboard();
   } catch (err) {
-    status.textContent = 'Error: ' + err.message;
+    status.textContent = t('sheet.error', { msg: err.message });
   }
 });
 
 $('#profile-reset').addEventListener('click', async () => {
-  if (!confirm('Reset profile to defaults (general fitness, beginner, 150 min/week)? Timezone is kept.')) return;
+  if (!confirm(t('me.resetConfirm'))) return;
   const status = $('#profile-status');
-  status.textContent = 'Resetting…';
+  status.textContent = t('me.resetting');
   try {
     const p = await api('/api/me/profile/reset', { method: 'POST' });
     renderProfile(p);
-    status.textContent = 'Reset.';
+    status.textContent = t('me.reset');
     await loadDashboard();
   } catch (err) {
-    status.textContent = 'Error: ' + err.message;
+    status.textContent = t('sheet.error', { msg: err.message });
   }
 });
 
 /* ---------- Data wipe ---------- */
 
 $('#reset-button').addEventListener('click', async () => {
-  const phrase = prompt('Type DELETE to wipe every activity you have logged. This cannot be undone.');
+  const phrase = prompt(t('me.deletePrompt'));
   if (phrase !== 'DELETE') return;
   const status = $('#reset-status');
-  status.textContent = 'Deleting…';
+  status.textContent = t('me.deleting');
   try {
     const r = await fetch('/api/me/workouts', { method: 'DELETE', headers: { 'X-Confirm-Delete-All': 'yes' } });
     if (!r.ok) {
@@ -785,12 +831,12 @@ $('#reset-button').addEventListener('click', async () => {
       throw new Error(err.error || 'failed');
     }
     const out = await r.json();
-    status.textContent = `Deleted ${out.deleted} activities.`;
+    status.textContent = t('me.deleted', { n: out.deleted });
     await loadDashboard();
     if (currentRoute() === 'cardio') renderCardioView();
     if (currentRoute() === 'gym') renderGymView();
   } catch (err) {
-    status.textContent = 'Error: ' + err.message;
+    status.textContent = t('sheet.error', { msg: err.message });
   }
 });
 
@@ -820,9 +866,24 @@ function escapeHtml(s) {
 /* ---------- bootstrap ---------- */
 
 (async () => {
+  // Initial locale from browser only — once the profile loads, we'll switch
+  // again if the user has a saved preference. Doing it in two steps means the
+  // first paint is in a plausible language instead of always English.
+  window.i18n.setLocale(window.i18n.pickInitialLocale(null));
+
   const me = await loadMe();
   if (!me) return;
   showView(currentRoute());
   await loadDashboard();
+  // If the loaded profile carries a preferred locale that differs from the
+  // browser default, switch now (re-runs applyDom across all static text).
+  const saved = state.profile && state.profile.locale;
+  if (saved && saved !== window.i18n.currentLocale()) {
+    window.i18n.setLocale(saved);
+    // Re-render dynamic pieces that don't carry data-i18n.
+    if (state.dashboard) {
+      renderHero(state.dashboard.summary, state.dashboard.lifetime);
+    }
+  }
   loadVersion();
 })();

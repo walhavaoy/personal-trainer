@@ -25,6 +25,12 @@ export interface WeekSummary {
   lastWeekDistanceKm: number;
   weekOverWeekDeltaMinutes: number;   // thisWeek - lastWeek (signed)
   weekOverWeekTrend: Trend;
+  // i18n: a string key the frontend resolves against its locale catalog, plus
+  // the numeric/text params that fill its {placeholders}. weekCoachMessage is
+  // the English rendering of the same key+params and is kept so clients
+  // without an i18n catalog (or unknown locale) still get readable text.
+  weekCoachKey: string;
+  weekCoachParams: Record<string, number | string>;
   weekCoachMessage: string;
   // Highest weekly total in the 60 days of history we pull, excluding the
   // current (in-progress) week. UI uses this to show a "Best week so far"
@@ -120,29 +126,77 @@ function computeStreak(sorted: WorkoutRow[], now: Date, tz: string): number {
   return streak;
 }
 
+interface CoachOutput {
+  key: string;
+  params: Record<string, number | string>;
+  message: string;
+}
+
+/**
+ * Returns the i18n key + params + English-rendered string for the weekly
+ * coach line. The frontend resolves `key` against its locale catalog and
+ * formats with `params`; `message` is what to show when no catalog is
+ * available (legacy/unknown locale).
+ *
+ * Why we return all three: introducing keys without a string fallback
+ * would break any client that doesn't yet know about i18n.js.
+ */
 function pickWeekCoachMessage(
   thisWeek: number,
   lastWeek: number,
-  target: number,
+  _target: number,
   trend: Trend,
-): string {
+): CoachOutput {
   if (trend === 'new') {
-    return target > 0 && thisWeek === 0
-      ? "Fresh start this week — anything beats zero. Pick the smallest session and finish it."
-      : "First week tracking — let's see what a full seven days looks like.";
+    if (thisWeek === 0) {
+      return {
+        key: 'coach.new.zero',
+        params: {},
+        message: "Fresh start this week — anything beats zero. Pick the smallest session and finish it.",
+      };
+    }
+    return {
+      key: 'coach.new.nonzero',
+      params: {},
+      message: "First week tracking — let's see what a full seven days looks like.",
+    };
   }
   const delta = thisWeek - lastWeek;
   const pct = lastWeek > 0 ? Math.round((thisWeek / lastWeek) * 100) : 0;
   if (trend === 'flat') {
-    return "Steady — same volume as last week. Stability is its own win.";
+    return {
+      key: 'coach.flat',
+      params: {},
+      message: "Steady — same volume as last week. Stability is its own win.",
+    };
   }
   if (trend === 'up') {
-    if (lastWeek === 0) return `Logged ${thisWeek} min this week vs nothing last week. That's the hard step.`;
-    return `+${delta} min vs last week (${pct}%). Keep stacking it.`;
+    if (lastWeek === 0) {
+      return {
+        key: 'coach.up.from_zero',
+        params: { thisWeek },
+        message: `Logged ${thisWeek} min this week vs nothing last week. That's the hard step.`,
+      };
+    }
+    return {
+      key: 'coach.up',
+      params: { delta, pct },
+      message: `+${delta} min vs last week (${pct}%). Keep stacking it.`,
+    };
   }
   // down
-  if (thisWeek === 0) return `No minutes yet this week (${lastWeek} last week). Pick the smallest session and start.`;
-  return `${pct}% of last week (${delta} min). Don't let the slip become a habit.`;
+  if (thisWeek === 0) {
+    return {
+      key: 'coach.down.zero',
+      params: { lastWeek },
+      message: `No minutes yet this week (${lastWeek} last week). Pick the smallest session and start.`,
+    };
+  }
+  return {
+    key: 'coach.down',
+    params: { pct, delta },
+    message: `${pct}% of last week (${delta} min). Don't let the slip become a habit.`,
+  };
 }
 
 export function computeSummary(
@@ -205,6 +259,8 @@ export function computeSummary(
     else trend = delta > 0 ? 'up' : 'down';
   }
 
+  const coach = pickWeekCoachMessage(thisWeekMinutes, lastWeekMinutes, target, trend);
+
   // Best prior week: bucket all workouts (excluding this in-progress week) by
   // their Monday, sum minutes/distance, take the max for each.
   const priorMinutesByMonday: Map<string, number> = new Map();
@@ -246,7 +302,9 @@ export function computeSummary(
     lastWeekDistanceKm,
     weekOverWeekDeltaMinutes: thisWeekMinutes - lastWeekMinutes,
     weekOverWeekTrend: trend,
-    weekCoachMessage: pickWeekCoachMessage(thisWeekMinutes, lastWeekMinutes, target, trend),
+    weekCoachKey: coach.key,
+    weekCoachParams: coach.params,
+    weekCoachMessage: coach.message,
     bestPriorWeekMinutes,
     bestPriorWeekDistanceKm,
   };

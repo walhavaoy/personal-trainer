@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   pool, migrate,
-  VALID_GOALS, VALID_LEVELS, VALID_KINDS, CARDIO_KINDS, VALID_STATUSES,
+  VALID_GOALS, VALID_LEVELS, VALID_KINDS, CARDIO_KINDS, VALID_STATUSES, VALID_LOCALES,
   isValidTimezone, defaultThemeForKind,
   type ProfileRow, type WorkoutRow, type GymWorkoutRow, type GymSetRow,
 } from './db.js';
@@ -275,6 +275,16 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
   const level = typeof body['fitnessLevel'] === 'string' ? body['fitnessLevel'] : undefined;
   const weekly = typeof body['weeklyMinutes'] === 'number' ? body['weeklyMinutes'] : undefined;
   const timezone = typeof body['timezone'] === 'string' ? body['timezone'] : undefined;
+  // locale: '' or null clears (auto-detect again). Missing leaves unchanged.
+  const localeInput = body['locale'];
+  let locale: string | null | undefined;
+  if (localeInput === undefined) locale = undefined;
+  else if (localeInput === null || localeInput === '') locale = null;
+  else if (typeof localeInput === 'string' && VALID_LOCALES.has(localeInput)) locale = localeInput;
+  else {
+    res.status(400).json({ error: `locale must be one of: ${Array.from(VALID_LOCALES).join(', ')} (or null to auto-detect)` });
+    return;
+  }
   // displayName: empty string clears the override; null also clears; missing leaves unchanged.
   const displayNameInput = body['displayName'];
   let displayName: string | null | undefined;
@@ -312,10 +322,13 @@ app.put('/api/me/profile', async (req: Request, res: Response) => {
               weekly_minutes = COALESCE($4, weekly_minutes),
               timezone       = COALESCE($5, timezone),
               display_name   = CASE WHEN $6::bool THEN $7 ELSE display_name END,
+              locale         = CASE WHEN $8::bool THEN $9 ELSE locale END,
               updated_at     = now()
         WHERE username = $1
       RETURNING *`,
-      [user.username, goal ?? null, level ?? null, weekly ?? null, timezone ?? null, displayName !== undefined, displayName ?? null],
+      [user.username, goal ?? null, level ?? null, weekly ?? null, timezone ?? null,
+       displayName !== undefined, displayName ?? null,
+       locale !== undefined, locale],
     );
     res.json(profileToJson(upd.rows[0]!));
   } catch (err) {
@@ -1664,6 +1677,7 @@ function profileToJson(row: ProfileRow): Record<string, unknown> {
     fitnessLevel: row.fitness_level,
     weeklyMinutes: row.weekly_minutes,
     timezone: row.timezone,
+    locale: row.locale,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };

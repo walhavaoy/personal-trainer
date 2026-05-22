@@ -15,6 +15,11 @@ export interface TodaySession {
   theme: string;
   totalMinutes: number;
   blocks: SessionBlock[];
+  // i18n: key + params the frontend resolves against its catalog.
+  // trainerNote is the English rendering, retained so legacy clients still
+  // display readable text.
+  trainerNoteKey: string;
+  trainerNoteParams: Record<string, number | string>;
   trainerNote: string;
   adaptation: 'recovery' | 'baseline' | 'progression';
 }
@@ -43,30 +48,61 @@ const LEVEL_FACTOR: Record<string, number> = {
 
 interface Adaptation {
   factor: number;
+  // i18n key + params; note is the English rendering of the same key.
+  key: string;
+  params: Record<string, number | string>;
   note: string;
   kind: 'recovery' | 'baseline' | 'progression';
 }
 
 function pickAdaptation(ctx: RecentContext, theme: string): Adaptation {
   if (theme === 'Rest') {
-    return { factor: 1, kind: 'baseline', note: 'Rest day — protect tomorrow by actually resting today.' };
+    return {
+      factor: 1, kind: 'baseline',
+      key: 'trainer.rest', params: {},
+      note: 'Rest day — protect tomorrow by actually resting today.',
+    };
   }
   if (ctx.yesterdayComplianceRatio === null && !ctx.yesterdayWasRest) {
     if (ctx.streakDays === 0) {
-      return { factor: 0.9, kind: 'recovery', note: "First session back — keep it doable so you stack a second tomorrow." };
+      return {
+        factor: 0.9, kind: 'recovery',
+        key: 'trainer.first_session_back', params: {},
+        note: "First session back — keep it doable so you stack a second tomorrow.",
+      };
     }
-    return { factor: 1, kind: 'baseline', note: `Streak of ${ctx.streakDays} day(s). Ride it.` };
+    return {
+      factor: 1, kind: 'baseline',
+      key: 'trainer.streak.ride', params: { streakDays: ctx.streakDays },
+      note: `Streak of ${ctx.streakDays} day(s). Ride it.`,
+    };
   }
   if (ctx.yesterdayComplianceRatio !== null && ctx.yesterdayComplianceRatio < 0.5) {
-    return { factor: 0.8, kind: 'recovery', note: "Yesterday came up short — easing today so you finish it." };
+    return {
+      factor: 0.8, kind: 'recovery',
+      key: 'trainer.yesterday_short', params: {},
+      note: "Yesterday came up short — easing today so you finish it.",
+    };
   }
   if (ctx.yesterdayComplianceRatio !== null && ctx.yesterdayComplianceRatio >= 1.0 && ctx.streakDays >= 3) {
-    return { factor: 1.1, kind: 'progression', note: `Streak of ${ctx.streakDays} and you closed yesterday — small bump today.` };
+    return {
+      factor: 1.1, kind: 'progression',
+      key: 'trainer.progression', params: { streakDays: ctx.streakDays },
+      note: `Streak of ${ctx.streakDays} and you closed yesterday — small bump today.`,
+    };
   }
   if (ctx.streakDays >= 5) {
-    return { factor: 1, kind: 'baseline', note: `Five-plus day streak — keep the form clean.` };
+    return {
+      factor: 1, kind: 'baseline',
+      key: 'trainer.streak.five_plus', params: {},
+      note: `Five-plus day streak — keep the form clean.`,
+    };
   }
-  return { factor: 1, kind: 'baseline', note: 'Steady session. Show up, finish strong.' };
+  return {
+    factor: 1, kind: 'baseline',
+    key: 'trainer.steady', params: {},
+    note: 'Steady session. Show up, finish strong.',
+  };
 }
 
 export function deriveSession(
@@ -83,8 +119,8 @@ export function deriveSession(
   // adaptationOverride='baseline' is used by the preview endpoint so far-future
   // days don't pick up a today-only cushion (e.g. "first session back" 0.9×)
   // when the recent context happens to be empty.
-  const adaptation = adaptationOverride === 'baseline'
-    ? { factor: 1, kind: 'baseline' as const, note: '' }
+  const adaptation: Adaptation = adaptationOverride === 'baseline'
+    ? { factor: 1, kind: 'baseline', key: '', params: {}, note: '' }
     : pickAdaptation(ctx, theme);
 
   const targetPerDay = Math.max(15, Math.round(profile.weekly_minutes / 6));
@@ -119,6 +155,8 @@ export function deriveSession(
     theme,
     totalMinutes: blocks.reduce((s, b) => s + b.durationMinutes, 0),
     blocks,
+    trainerNoteKey: adaptation.key,
+    trainerNoteParams: adaptation.params,
     trainerNote: adaptation.note,
     adaptation: adaptation.kind,
   };

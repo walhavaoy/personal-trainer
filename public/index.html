@@ -16,8 +16,8 @@
       <header class="app-header">
         <div class="app-header__inner">
           <div class="app-header__title">
-            <span class="app-header__greeting" id="greeting">Hello,</span>
-            <span class="app-header__name" id="firstName">athlete</span>
+            <span class="app-header__greeting" id="greeting" data-i18n="app.greeting">Hello,</span>
+            <span class="app-header__name" id="firstName" data-i18n="app.athlete">athlete</span>
           </div>
           <div class="app-header__meta" id="who" data-testid="pt-text-who"></div>
         </div>
@@ -27,29 +27,29 @@
         <!-- DASHBOARD ------------------------------------------------------- -->
         <section class="view" id="view-dashboard" data-view="dashboard">
           <div id="onboarding" class="card card--onboarding" data-testid="pt-card-welcome" hidden>
-            <h3>Welcome to your trainer.</h3>
-            <p class="muted">Pick what you want to do: walks, runs, cycling, or a gym session. I'll keep track and show your progress here.</p>
+            <h3 data-i18n="dashboard.onboarding.heading">Welcome to your trainer.</h3>
+            <p class="muted" data-i18n="dashboard.onboarding.body">Pick what you want to do: walks, runs, cycling, or a gym session. I'll keep track and show your progress here.</p>
             <div class="onboarding-cta">
-              <button type="button" class="btn btn--primary" data-action="plan-cardio" data-kind="run">Plan a run</button>
-              <button type="button" class="btn btn--secondary" data-action="start-gym">Start gym session</button>
+              <button type="button" class="btn btn--primary" data-action="plan-cardio" data-kind="run" data-i18n="dashboard.onboarding.cta.run">Plan a run</button>
+              <button type="button" class="btn btn--secondary" data-action="start-gym" data-i18n="dashboard.onboarding.cta.gym">Start gym session</button>
             </div>
           </div>
 
           <div class="card card--hero" id="summary-card" data-testid="pt-card-summary" hidden>
             <div class="hero-top">
               <div class="hero-stat">
-                <span class="hero-stat__label">This week</span>
+                <span class="hero-stat__label" data-i18n="dashboard.hero.thisWeek">This week</span>
                 <span class="hero-stat__value">
                   <strong id="summary-minutes">0</strong>
                   <span class="hero-stat__unit">/ <span id="summary-target">0</span> min</span>
                 </span>
               </div>
               <div class="hero-stat hero-stat--right">
-                <span class="hero-stat__label">Streak</span>
+                <span class="hero-stat__label" data-i18n="dashboard.hero.streak">Streak</span>
                 <span class="hero-stat__value">
                   <span id="summary-streak-icon" class="streak-flame">🔥</span>
                   <strong id="summary-streak-days">0</strong>
-                  <span class="hero-stat__unit" id="summary-streak-unit">days</span>
+                  <span class="hero-stat__unit" id="summary-streak-unit" data-i18n="dashboard.hero.days">days</span>
                 </span>
               </div>
             </div>
@@ -60,7 +60,7 @@
                 <span class="muted" id="summary-last-week"></span>
               </div>
               <div class="hero-pill">
-                <span class="muted">Sessions</span>
+                <span class="muted" data-i18n="dashboard.hero.sessions">Sessions</span>
                 <strong id="summary-sessions">0</strong>
               </div>
             </div>
@@ -70,39 +70,39 @@
 
           <div class="card">
             <div class="card-head">
-              <h3>Quick actions</h3>
+              <h3 data-i18n="dashboard.quickActions">Quick actions</h3>
             </div>
             <div class="quick-actions">
               <button type="button" class="quick" data-action="plan-cardio" data-kind="walk" data-testid="pt-quick-walk">
                 <span class="quick__icon">🚶</span>
-                <span class="quick__label">Walk</span>
+                <span class="quick__label" data-i18n="dashboard.quick.walk">Walk</span>
               </button>
               <button type="button" class="quick" data-action="plan-cardio" data-kind="run" data-testid="pt-quick-run">
                 <span class="quick__icon">🏃</span>
-                <span class="quick__label">Run</span>
+                <span class="quick__label" data-i18n="dashboard.quick.run">Run</span>
               </button>
               <button type="button" class="quick" data-action="plan-cardio" data-kind="cycle" data-testid="pt-quick-cycle">
                 <span class="quick__icon">🚴</span>
-                <span class="quick__label">Cycle</span>
+                <span class="quick__label" data-i18n="dashboard.quick.cycle">Cycle</span>
               </button>
               <button type="button" class="quick" data-action="start-gym" data-testid="pt-quick-gym">
                 <span class="quick__icon">🏋️</span>
-                <span class="quick__label">Gym</span>
+                <span class="quick__label" data-i18n="dashboard.quick.gym">Gym</span>
               </button>
             </div>
           </div>
 
           <div class="card" id="planned-card" hidden>
             <div class="card-head">
-              <h3>Upcoming</h3>
+              <h3 data-i18n="dashboard.upcoming">Upcoming</h3>
             </div>
             <ul class="activity-list" id="planned-list" data-testid="pt-list-planned"></ul>
           </div>
 
           <div class="card">
             <div class="card-head">
-              <h3>Weekly trend</h3>
-              <span class="muted" id="trend-caption">Last 8 weeks</span>
+              <h3 data-i18n="dashboard.trend">Weekly trend</h3>
+              <span class="muted" id="trend-caption" data-i18n="dashboard.trend.caption">Last 8 weeks</span>
             </div>
             <svg id="summary-trend-svg" data-testid="pt-svg-trend"
                  viewBox="0 0 320 80" preserveAspectRatio="none"
@@ -110,17 +110,17 @@
                  aria-label="Weekly minutes trend"></svg>
             <div class="trend-axis">
               <span class="muted" id="trend-axis-oldest">—</span>
-              <span class="muted" id="trend-axis-newest">this week</span>
+              <span class="muted" id="trend-axis-newest" data-i18n="dashboard.trend.thisWeek">this week</span>
             </div>
           </div>
 
           <div class="card">
             <div class="card-head">
-              <h3>Recent</h3>
+              <h3 data-i18n="dashboard.recent">Recent</h3>
             </div>
-            <div id="dashboard-recent-loading" class="placeholder">Loading…</div>
+            <div id="dashboard-recent-loading" class="placeholder">…</div>
             <ul class="activity-list" id="dashboard-recent" data-testid="pt-list-recent" hidden></ul>
-            <p id="dashboard-recent-empty" class="muted" hidden>Nothing yet — pick a quick action above to start.</p>
+            <p id="dashboard-recent-empty" class="muted" hidden data-i18n="dashboard.recent.empty">Nothing yet — pick a quick action above to start.</p>
           </div>
 
           <div id="summary-lifetime" data-testid="pt-text-lifetime" class="lifetime-strap muted" hidden></div>
@@ -130,27 +130,27 @@
         <section class="view" id="view-cardio" data-view="cardio" hidden>
           <div class="card card--actions">
             <div class="card-head">
-              <h2>Cardio</h2>
-              <button type="button" class="btn btn--primary" data-action="plan-cardio" data-testid="pt-button-plan-cardio">+ Plan</button>
+              <h2 data-i18n="cardio.title">Cardio</h2>
+              <button type="button" class="btn btn--primary" data-action="plan-cardio" data-testid="pt-button-plan-cardio" data-i18n="cardio.plan">+ Plan</button>
             </div>
             <div class="seg" id="cardio-kind-filter" role="tablist">
-              <button type="button" class="seg__btn is-active" data-cardio-filter="all" data-testid="pt-filter-cardio-all">All</button>
-              <button type="button" class="seg__btn" data-cardio-filter="walk">🚶 Walk</button>
-              <button type="button" class="seg__btn" data-cardio-filter="run">🏃 Run</button>
-              <button type="button" class="seg__btn" data-cardio-filter="cycle">🚴 Cycle</button>
+              <button type="button" class="seg__btn is-active" data-cardio-filter="all" data-testid="pt-filter-cardio-all" data-i18n="cardio.filter.all">All</button>
+              <button type="button" class="seg__btn" data-cardio-filter="walk" data-i18n="cardio.filter.walk">🚶 Walk</button>
+              <button type="button" class="seg__btn" data-cardio-filter="run" data-i18n="cardio.filter.run">🏃 Run</button>
+              <button type="button" class="seg__btn" data-cardio-filter="cycle" data-i18n="cardio.filter.cycle">🚴 Cycle</button>
             </div>
           </div>
 
           <div class="card" id="cardio-planned-card" hidden>
-            <div class="card-head"><h3>Planned</h3></div>
+            <div class="card-head"><h3 data-i18n="cardio.planned">Planned</h3></div>
             <ul class="activity-list" id="cardio-planned-list"></ul>
           </div>
 
           <div class="card">
-            <div class="card-head"><h3>History</h3></div>
-            <div id="cardio-history-loading" class="placeholder">Loading…</div>
+            <div class="card-head"><h3 data-i18n="cardio.history">History</h3></div>
+            <div id="cardio-history-loading" class="placeholder">…</div>
             <ul class="activity-list" id="cardio-history-list" data-testid="pt-list-cardio" hidden></ul>
-            <p id="cardio-history-empty" class="muted" hidden>No cardio yet. Tap + Plan to schedule a walk, run, or ride.</p>
+            <p id="cardio-history-empty" class="muted" hidden data-i18n="cardio.history.empty">No cardio yet. Tap + Plan to schedule a walk, run, or ride.</p>
           </div>
         </section>
 
@@ -158,69 +158,76 @@
         <section class="view" id="view-gym" data-view="gym" hidden>
           <div class="card card--actions">
             <div class="card-head">
-              <h2>Gym</h2>
-              <button type="button" class="btn btn--primary" data-action="start-gym" data-testid="pt-button-start-gym">+ New</button>
+              <h2 data-i18n="gym.title">Gym</h2>
+              <button type="button" class="btn btn--primary" data-action="start-gym" data-testid="pt-button-start-gym" data-i18n="gym.new">+ New</button>
             </div>
-            <p class="muted card-sub">Log sets, reps, and weight. Templates copy your last session.</p>
+            <p class="muted card-sub" data-i18n="gym.subtitle">Log sets, reps, and weight. Templates copy your last session.</p>
           </div>
 
           <div class="card">
-            <div class="card-head"><h3>Sessions</h3></div>
-            <div id="gym-list-loading" class="placeholder">Loading…</div>
+            <div class="card-head"><h3 data-i18n="gym.sessions">Sessions</h3></div>
+            <div id="gym-list-loading" class="placeholder">…</div>
             <ul class="gym-list" id="gym-list" data-testid="pt-list-gym" hidden></ul>
-            <p id="gym-list-empty" class="muted" hidden>No gym sessions yet. Tap + New to log your first lift.</p>
+            <p id="gym-list-empty" class="muted" hidden data-i18n="gym.empty">No gym sessions yet. Tap + New to log your first lift.</p>
           </div>
         </section>
 
         <!-- ME -------------------------------------------------------------- -->
         <section class="view" id="view-me" data-view="me" hidden>
           <div class="card">
-            <div class="card-head"><h2>Profile</h2></div>
+            <div class="card-head"><h2 data-i18n="me.profile">Profile</h2></div>
             <form id="profile-form" data-testid="pt-form-profile" class="form-grid">
               <label>
-                Display name
-                <input type="text" name="displayName" maxlength="100" placeholder="(your full name)" data-testid="pt-input-displayname" />
+                <span data-i18n="me.displayName">Display name</span>
+                <input type="text" name="displayName" maxlength="100" data-i18n-placeholder="me.displayName.placeholder" placeholder="(your full name)" data-testid="pt-input-displayname" />
               </label>
               <label>
-                Goal
+                <span data-i18n="me.goal">Goal</span>
                 <select name="goal" data-testid="pt-select-goal">
-                  <option value="general_fitness">General fitness</option>
-                  <option value="strength">Strength</option>
-                  <option value="endurance">Endurance</option>
-                  <option value="weight_loss">Weight loss</option>
-                  <option value="mobility">Mobility</option>
+                  <option value="general_fitness" data-i18n="me.goal.general_fitness">General fitness</option>
+                  <option value="strength" data-i18n="me.goal.strength">Strength</option>
+                  <option value="endurance" data-i18n="me.goal.endurance">Endurance</option>
+                  <option value="weight_loss" data-i18n="me.goal.weight_loss">Weight loss</option>
+                  <option value="mobility" data-i18n="me.goal.mobility">Mobility</option>
                 </select>
               </label>
               <label>
-                Fitness level
+                <span data-i18n="me.fitnessLevel">Fitness level</span>
                 <select name="fitnessLevel" data-testid="pt-select-level">
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
+                  <option value="beginner" data-i18n="me.level.beginner">Beginner</option>
+                  <option value="intermediate" data-i18n="me.level.intermediate">Intermediate</option>
+                  <option value="advanced" data-i18n="me.level.advanced">Advanced</option>
                 </select>
               </label>
               <label>
-                Weekly target (minutes)
+                <span data-i18n="me.weekly">Weekly target (minutes)</span>
                 <input type="number" name="weeklyMinutes" min="15" max="1500" step="15" data-testid="pt-input-weekly" />
               </label>
               <label>
-                Timezone
+                <span data-i18n="me.timezone">Timezone</span>
                 <input type="text" name="timezone" maxlength="64" placeholder="UTC" data-testid="pt-input-timezone" />
               </label>
+              <label>
+                <span data-i18n="me.language">Language</span>
+                <select name="locale" data-testid="pt-select-locale">
+                  <option value="en" data-i18n="me.lang.en">English</option>
+                  <option value="fi" data-i18n="me.lang.fi">Suomi</option>
+                </select>
+              </label>
               <div class="form-actions">
-                <button type="submit" class="btn btn--primary" data-testid="pt-button-save">Save</button>
-                <button type="button" class="btn btn--ghost" id="profile-reset" data-testid="pt-button-profile-reset">Reset defaults</button>
+                <button type="submit" class="btn btn--primary" data-testid="pt-button-save" data-i18n="me.save">Save</button>
+                <button type="button" class="btn btn--ghost" id="profile-reset" data-testid="pt-button-profile-reset" data-i18n="me.resetDefaults">Reset defaults</button>
                 <span id="profile-status" class="muted"></span>
               </div>
             </form>
           </div>
 
           <div class="card">
-            <div class="card-head"><h3>Data</h3></div>
-            <p class="muted card-sub">Take it with you, or wipe it clean.</p>
+            <div class="card-head"><h3 data-i18n="me.data">Data</h3></div>
+            <p class="muted card-sub" data-i18n="me.dataNote">Take it with you, or wipe it clean.</p>
             <div class="data-actions">
-              <a href="/api/me/workouts.csv" class="btn btn--ghost" data-testid="pt-link-export">Export CSV</a>
-              <button type="button" id="reset-button" class="btn btn--danger" data-testid="pt-button-reset">Delete all activity</button>
+              <a href="/api/me/workouts.csv" class="btn btn--ghost" data-testid="pt-link-export" data-i18n="me.export">Export CSV</a>
+              <button type="button" id="reset-button" class="btn btn--danger" data-testid="pt-button-reset" data-i18n="me.deleteAll">Delete all activity</button>
               <span id="reset-status" class="muted"></span>
             </div>
           </div>
@@ -233,19 +240,19 @@
       <nav class="tabbar" role="navigation" aria-label="Sections">
         <a href="#/" class="tabbar__btn is-active" data-tab="dashboard" data-testid="pt-tab-dashboard">
           <span class="tabbar__icon">🏠</span>
-          <span class="tabbar__label">Home</span>
+          <span class="tabbar__label" data-i18n="tab.home">Home</span>
         </a>
         <a href="#/cardio" class="tabbar__btn" data-tab="cardio" data-testid="pt-tab-cardio">
           <span class="tabbar__icon">🏃</span>
-          <span class="tabbar__label">Cardio</span>
+          <span class="tabbar__label" data-i18n="tab.cardio">Cardio</span>
         </a>
         <a href="#/gym" class="tabbar__btn" data-tab="gym" data-testid="pt-tab-gym">
           <span class="tabbar__icon">🏋️</span>
-          <span class="tabbar__label">Gym</span>
+          <span class="tabbar__label" data-i18n="tab.gym">Gym</span>
         </a>
         <a href="#/me" class="tabbar__btn" data-tab="me" data-testid="pt-tab-me">
           <span class="tabbar__icon">👤</span>
-          <span class="tabbar__label">Me</span>
+          <span class="tabbar__label" data-i18n="tab.me">Me</span>
         </a>
       </nav>
     </div>
@@ -266,35 +273,35 @@
     <template id="tpl-cardio-form">
       <form class="cardio-form" data-testid="pt-form-cardio">
         <div class="seg">
-          <label class="seg__btn"><input type="radio" name="kind" value="walk" /><span>🚶 Walk</span></label>
-          <label class="seg__btn"><input type="radio" name="kind" value="run" checked /><span>🏃 Run</span></label>
-          <label class="seg__btn"><input type="radio" name="kind" value="cycle" /><span>🚴 Cycle</span></label>
+          <label class="seg__btn"><input type="radio" name="kind" value="walk" /><span>🚶 <span data-i18n="kind.walk">Walk</span></span></label>
+          <label class="seg__btn"><input type="radio" name="kind" value="run" checked /><span>🏃 <span data-i18n="kind.run">Run</span></span></label>
+          <label class="seg__btn"><input type="radio" name="kind" value="cycle" /><span>🚴 <span data-i18n="kind.cycle">Cycle</span></span></label>
         </div>
         <label>
-          When
+          <span data-i18n="sheet.cardio.when">When</span>
           <input type="date" name="date" required data-testid="pt-input-cardio-date" />
         </label>
         <div class="form-row">
           <label>
-            Distance (km)
-            <input type="number" name="distance" min="0" max="1000" step="0.1" placeholder="e.g. 5.0" data-testid="pt-input-cardio-distance" />
+            <span data-i18n="sheet.cardio.distance">Distance (km)</span>
+            <input type="number" name="distance" min="0" max="1000" step="0.1" data-i18n-placeholder="sheet.cardio.distance.placeholder" placeholder="e.g. 5.0" data-testid="pt-input-cardio-distance" />
           </label>
           <label>
-            Duration (min)
-            <input type="number" name="minutes" min="0" max="1000" step="1" placeholder="e.g. 30" data-testid="pt-input-cardio-minutes" />
+            <span data-i18n="sheet.cardio.duration">Duration (min)</span>
+            <input type="number" name="minutes" min="0" max="1000" step="1" data-i18n-placeholder="sheet.cardio.duration.placeholder" placeholder="e.g. 30" data-testid="pt-input-cardio-minutes" />
           </label>
         </div>
         <label>
-          Notes (optional)
-          <input type="text" name="notes" maxlength="500" placeholder="How did it feel?" />
+          <span data-i18n="sheet.cardio.notes">Notes (optional)</span>
+          <input type="text" name="notes" maxlength="500" data-i18n-placeholder="sheet.cardio.notes.placeholder" placeholder="How did it feel?" />
         </label>
         <div class="seg seg--mode">
-          <label class="seg__btn"><input type="radio" name="mode" value="completed" checked /><span>Log it (done)</span></label>
-          <label class="seg__btn"><input type="radio" name="mode" value="planned" /><span>Plan for later</span></label>
+          <label class="seg__btn"><input type="radio" name="mode" value="completed" checked /><span data-i18n="sheet.mode.logged">Log it (done)</span></label>
+          <label class="seg__btn"><input type="radio" name="mode" value="planned" /><span data-i18n="sheet.mode.planned">Plan for later</span></label>
         </div>
         <div class="form-actions form-actions--end">
-          <button type="button" class="btn btn--ghost" data-sheet-close>Cancel</button>
-          <button type="submit" class="btn btn--primary" data-testid="pt-button-save-cardio">Save</button>
+          <button type="button" class="btn btn--ghost" data-sheet-close data-i18n="sheet.cancel">Cancel</button>
+          <button type="submit" class="btn btn--primary" data-testid="pt-button-save-cardio" data-i18n="sheet.save">Save</button>
         </div>
         <p class="sheet-status muted" data-status></p>
       </form>
@@ -304,27 +311,27 @@
       <form class="gym-form" data-testid="pt-form-gym">
         <div class="form-row">
           <label>
-            Name
-            <input type="text" name="name" maxlength="100" placeholder="e.g. Push day" required data-testid="pt-input-gym-name" />
+            <span data-i18n="sheet.gym.name">Name</span>
+            <input type="text" name="name" maxlength="100" data-i18n-placeholder="sheet.gym.name.placeholder" placeholder="e.g. Push day" required data-testid="pt-input-gym-name" />
           </label>
           <label>
-            Date
+            <span data-i18n="sheet.gym.date">Date</span>
             <input type="date" name="date" required data-testid="pt-input-gym-date" />
           </label>
         </div>
         <div class="exercises" data-exercises></div>
-        <button type="button" class="btn btn--ghost btn--full" data-add-exercise data-testid="pt-button-add-exercise">+ Add exercise</button>
+        <button type="button" class="btn btn--ghost btn--full" data-add-exercise data-testid="pt-button-add-exercise" data-i18n="sheet.gym.addExercise">+ Add exercise</button>
         <label>
-          Notes (optional)
-          <input type="text" name="notes" maxlength="500" placeholder="How did it feel?" />
+          <span data-i18n="sheet.gym.notes">Notes (optional)</span>
+          <input type="text" name="notes" maxlength="500" data-i18n-placeholder="sheet.gym.notes.placeholder" placeholder="How did it feel?" />
         </label>
         <div class="seg seg--mode">
-          <label class="seg__btn"><input type="radio" name="mode" value="completed" checked /><span>Log it (done)</span></label>
-          <label class="seg__btn"><input type="radio" name="mode" value="planned" /><span>Plan for later</span></label>
+          <label class="seg__btn"><input type="radio" name="mode" value="completed" checked /><span data-i18n="sheet.mode.logged">Log it (done)</span></label>
+          <label class="seg__btn"><input type="radio" name="mode" value="planned" /><span data-i18n="sheet.mode.planned">Plan for later</span></label>
         </div>
         <div class="form-actions form-actions--end">
-          <button type="button" class="btn btn--ghost" data-sheet-close>Cancel</button>
-          <button type="submit" class="btn btn--primary" data-testid="pt-button-save-gym">Save</button>
+          <button type="button" class="btn btn--ghost" data-sheet-close data-i18n="sheet.cancel">Cancel</button>
+          <button type="submit" class="btn btn--primary" data-testid="pt-button-save-gym" data-i18n="sheet.save">Save</button>
         </div>
         <p class="sheet-status muted" data-status></p>
       </form>
@@ -333,24 +340,25 @@
     <template id="tpl-gym-exercise">
       <div class="exercise" data-exercise>
         <div class="exercise-head">
-          <input type="text" name="exerciseName" maxlength="100" placeholder="Exercise name" required data-testid="pt-input-exercise-name" />
+          <input type="text" name="exerciseName" maxlength="100" data-i18n-placeholder="sheet.gym.exercise.placeholder" placeholder="Exercise name" required data-testid="pt-input-exercise-name" />
           <button type="button" class="link-btn link-btn--danger" data-remove-exercise aria-label="Remove">✕</button>
         </div>
         <div class="sets" data-sets></div>
-        <button type="button" class="link-btn link-btn--accent" data-add-set>+ Add set</button>
+        <button type="button" class="link-btn link-btn--accent" data-add-set data-i18n="sheet.gym.addSet">+ Add set</button>
       </div>
     </template>
 
     <template id="tpl-gym-set">
       <div class="set" data-set>
         <span class="set__n" data-set-n>1</span>
-        <input type="number" name="reps" min="0" max="1000" step="1" placeholder="reps" required data-testid="pt-input-set-reps" />
+        <input type="number" name="reps" min="0" max="1000" step="1" data-i18n-placeholder="sheet.gym.reps.placeholder" placeholder="reps" required data-testid="pt-input-set-reps" />
         <span class="set__x">×</span>
-        <input type="number" name="weight" min="0" max="9999" step="0.5" placeholder="kg" data-testid="pt-input-set-weight" />
+        <input type="number" name="weight" min="0" max="9999" step="0.5" data-i18n-placeholder="sheet.gym.weight.placeholder" placeholder="kg" data-testid="pt-input-set-weight" />
         <button type="button" class="link-btn link-btn--danger" data-remove-set aria-label="Remove">✕</button>
       </div>
     </template>
 
+    <script src="/js/i18n.js"></script>
     <script src="/js/pt.js"></script>
   </body>
 </html>

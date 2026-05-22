@@ -13,6 +13,7 @@ function profile(p: Partial<ProfileRow> = {}): ProfileRow {
     fitness_level: 'intermediate',
     weekly_minutes: 240,
     timezone: 'UTC',
+    locale: null,
     created_at: new Date(0),
     updated_at: new Date(0),
     ...p,
