@@ -91,6 +91,7 @@
 
       // Cardio sheet
       'sheet.cardio.title': 'Plan cardio',
+      'sheet.cardio.title.edit': 'Edit cardio',
       'sheet.cardio.when': 'When',
       'sheet.cardio.distance': 'Distance (km)',
       'sheet.cardio.duration': 'Duration (min)',
@@ -149,7 +150,8 @@
       'me.dataNote': 'Take it with you, or wipe it clean.',
       'me.export': 'Export CSV',
       'me.deleteAll': 'Delete all activity',
-      'me.deletePrompt': 'Type DELETE to wipe every activity you have logged. This cannot be undone.',
+      'me.deleteConfirmWord': 'DELETE',
+      'me.deletePrompt': 'Type {word} to wipe every activity you have logged. This cannot be undone.',
       'me.deleted': 'Deleted {n} activities.',
       'me.deleting': 'Deleting…',
 
@@ -175,6 +177,12 @@
       'date.today': 'Today',
       'date.yesterday': 'Yesterday',
       'date.tomorrow': 'Tomorrow',
+
+      // Errors / loading
+      'error.failed': 'Failed: {msg}',
+      'error.deleteFailed': 'Delete failed: {msg}',
+      'error.loadFailed': 'Could not load: {msg}',
+      'error.notSignedIn': 'Not signed in',
     },
 
     fi: {
@@ -246,6 +254,7 @@
       'gym.confirm.delete': 'Poista "{name}" päivältä {date}?',
 
       'sheet.cardio.title': 'Suunnittele suoritus',
+      'sheet.cardio.title.edit': 'Muokkaa suoritusta',
       'sheet.cardio.when': 'Milloin',
       'sheet.cardio.distance': 'Matka (km)',
       'sheet.cardio.duration': 'Kesto (min)',
@@ -302,7 +311,8 @@
       'me.dataNote': 'Ota mukaasi tai pyyhi pois.',
       'me.export': 'Vie CSV',
       'me.deleteAll': 'Poista kaikki tiedot',
-      'me.deletePrompt': 'Kirjoita DELETE poistaaksesi kaikki tallennetut suoritukset. Tätä ei voi peruuttaa.',
+      'me.deleteConfirmWord': 'POISTA',
+      'me.deletePrompt': 'Kirjoita {word} poistaaksesi kaikki tallennetut suoritukset. Tätä ei voi peruuttaa.',
       'me.deleted': 'Poistettu {n} suoritusta.',
       'me.deleting': 'Poistetaan…',
 
@@ -325,6 +335,12 @@
       'date.today': 'Tänään',
       'date.yesterday': 'Eilen',
       'date.tomorrow': 'Huomenna',
+
+      // Virheet / lataus
+      'error.failed': 'Epäonnistui: {msg}',
+      'error.deleteFailed': 'Poisto epäonnistui: {msg}',
+      'error.loadFailed': 'Lataus epäonnistui: {msg}',
+      'error.notSignedIn': 'Et ole kirjautunut',
     },
   };
 

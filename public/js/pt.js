@@ -21,6 +21,7 @@
 
 const ICONS = { walk: '🚶', run: '🏃', cycle: '🚴', gym: '🏋️', rest: '🛏️', mobility: '🧘', cardio: '❤️', other: '✨' };
 const TREND_GLYPH = { up: '↑', down: '↓', flat: '→', new: '·' };
+const CARDIO_KINDS = new Set(['walk', 'run', 'cycle']);
 
 // All user-visible strings go through i18n.t(). Use kindLabel() so a kind
 // without an explicit catalog entry still falls back to the raw key.
@@ -107,7 +108,7 @@ async function loadMe() {
     return me;
   } catch {
     $('#firstName').textContent = '';
-    $('#greeting').textContent = 'Not signed in';
+    $('#greeting').textContent = t('error.notSignedIn');
     return null;
   }
 }
@@ -117,6 +118,7 @@ async function loadMe() {
 document.addEventListener('i18n:change', () => {
   if (!state.dashboard) return;
   renderHero(state.dashboard.summary, state.dashboard.lifetime);
+  renderTrend(state.dashboard.trend);
   renderPlanned(state.dashboard.planned || []);
   renderRecent(state.dashboard.workouts || [], state.dashboard.recentGym || []);
   if (currentRoute() === 'cardio') renderCardioView();
@@ -214,7 +216,7 @@ function renderHero(s, lifetime) {
     const parts = [];
     if (minPB) parts.push(`+${s.thisWeekMinutes - s.bestPriorWeekMinutes} min`);
     if (distPB) parts.push(`+${Math.round((s.thisWeekDistanceKm - s.bestPriorWeekDistanceKm) * 10) / 10} km`);
-    best.textContent = `Best week so far · ${parts.join(' & ')} over your previous high`;
+    best.textContent = t('dashboard.hero.best', { parts: parts.join(' & ') });
     best.hidden = false;
   } else {
     best.hidden = true;
@@ -265,7 +267,7 @@ function renderTrend(weeks) {
     svg.appendChild(rect);
   });
   // Axis labels: show first weekStart at left, "this week" at right.
-  $('#trend-axis-oldest').textContent = weeks[0]?.weekStart || '';
+  $('#trend-axis-oldest').textContent = relativeDate(weeks[0]?.weekStart || '');
 }
 
 function renderPlanned(planned) {
@@ -373,9 +375,18 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
             }),
           });
           await loadDashboard();
-        } catch (e) { alert('Failed: ' + e.message); }
+        } catch (e) { alert(t('error.failed', { msg: e.message })); }
       });
       actions.appendChild(done);
+    }
+    if (CARDIO_KINDS.has(kind)) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'link-btn link-btn--accent';
+      editBtn.textContent = t('activity.edit');
+      editBtn.dataset.testid = 'pt-button-edit';
+      editBtn.addEventListener('click', () => openCardioSheet({ existing: a }));
+      actions.appendChild(editBtn);
     }
     const del = document.createElement('button');
     del.type = 'button';
@@ -388,7 +399,7 @@ function renderActivityItem(a, { showActions, plannedView } = {}) {
         await api('/api/me/workouts/' + a.id, { method: 'DELETE' });
         await loadDashboard();
         if (currentRoute() === 'cardio') renderCardioView();
-      } catch (e) { alert('Delete failed: ' + e.message); }
+      } catch (e) { alert(t('error.deleteFailed', { msg: e.message })); }
     });
     actions.appendChild(del);
     li.appendChild(actions);
@@ -469,7 +480,7 @@ async function renderCardioView() {
     for (const a of done) list.appendChild(renderActivityItem(a, { showActions: true }));
     list.hidden = false;
   } catch (e) {
-    loading.textContent = 'Could not load: ' + e.message;
+    loading.textContent = t('error.loadFailed', { msg: e.message });
   }
 }
 
@@ -490,7 +501,7 @@ async function renderGymView() {
     for (const g of gyms) list.appendChild(renderGymItem(g));
     list.hidden = false;
   } catch (e) {
-    loading.textContent = 'Could not load: ' + e.message;
+    loading.textContent = t('error.loadFailed', { msg: e.message });
   }
 }
 
@@ -567,7 +578,7 @@ function renderGymItem(g) {
       await api('/api/me/gym/' + g.id, { method: 'DELETE' });
       await loadDashboard();
       renderGymView();
-    } catch (e) { alert('Delete failed: ' + e.message); }
+    } catch (e) { alert(t('error.deleteFailed', { msg: e.message })); }
   });
   actions.appendChild(editBtn);
   actions.appendChild(repeatBtn);
@@ -615,14 +626,40 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet
 
 /* ---------- Cardio sheet ---------- */
 
-function openCardioSheet(kindHint) {
+function openCardioSheet(opts) {
+  if (opts === null || opts === undefined) opts = {};
+  if (typeof opts === 'string') opts = { kind: opts };
+  const existing = opts.existing || null;
+  const isEdit = !!(existing && existing.id);
+  const kindHint = existing ? existing.kind : (opts.kind || null);
+
   const tpl = $('#tpl-cardio-form').content.cloneNode(true);
   const form = tpl.querySelector('form');
+
+  // Pre-select kind radio; disable all kind radios in edit mode (PATCH cannot change kind).
   if (kindHint) {
     const radio = form.querySelector(`input[name="kind"][value="${kindHint}"]`);
     if (radio) radio.checked = true;
   }
-  form.elements['date'].value = todayIso();
+  if (isEdit) {
+    for (const r of form.querySelectorAll('input[name="kind"]')) r.disabled = true;
+  }
+
+  // Pre-fill fields when editing.
+  if (isEdit) {
+    form.elements['date'].value = existing.date;
+    const isPlanned = existing.status === 'planned';
+    const modeRadio = form.querySelector(`input[name="mode"][value="${isPlanned ? 'planned' : 'completed'}"]`);
+    if (modeRadio) modeRadio.checked = true;
+    const distance = isPlanned ? existing.plannedDistanceKm : existing.distanceKm;
+    const minutes = isPlanned ? existing.plannedMinutes : existing.completedMinutes;
+    if (distance != null && distance > 0) form.elements['distance'].value = String(distance);
+    if (minutes != null && minutes > 0) form.elements['minutes'].value = String(minutes);
+    form.elements['notes'].value = existing.notes || '';
+  } else {
+    form.elements['date'].value = todayIso();
+  }
+
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const status = form.elements['mode'].value;
@@ -631,20 +668,33 @@ function openCardioSheet(kindHint) {
     const distance = parseFloat(form.elements['distance'].value);
     const minutes = parseInt(form.elements['minutes'].value, 10);
     const notes = form.elements['notes'].value || null;
-    const payload = { kind, date, status, notes };
-    if (status === 'planned') {
-      if (Number.isFinite(minutes) && minutes > 0) payload.plannedMinutes = minutes;
-      if (Number.isFinite(distance) && distance > 0) payload.plannedDistanceKm = distance;
-    } else {
-      payload.completedMinutes = Number.isFinite(minutes) ? minutes : 0;
-      payload.plannedMinutes = payload.completedMinutes; // align planned to completed for a one-shot log
-      if (Number.isFinite(distance) && distance > 0) payload.distanceKm = distance;
-    }
     const status$ = form.querySelector('[data-status]');
     status$.textContent = t('sheet.saving');
     status$.classList.remove('sheet-status--err', 'sheet-status--ok');
     try {
-      await api('/api/me/activities', { method: 'POST', body: JSON.stringify(payload) });
+      if (isEdit) {
+        const patch = { status, date, notes };
+        if (status === 'planned') {
+          patch.plannedMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+          patch.plannedDistanceKm = Number.isFinite(distance) && distance > 0 ? distance : null;
+        } else {
+          patch.completedMinutes = Number.isFinite(minutes) ? minutes : 0;
+          patch.plannedMinutes = patch.completedMinutes;
+          patch.distanceKm = Number.isFinite(distance) && distance > 0 ? distance : null;
+        }
+        await api('/api/me/activities/' + existing.id, { method: 'PATCH', body: JSON.stringify(patch) });
+      } else {
+        const payload = { kind, date, status, notes };
+        if (status === 'planned') {
+          if (Number.isFinite(minutes) && minutes > 0) payload.plannedMinutes = minutes;
+          if (Number.isFinite(distance) && distance > 0) payload.plannedDistanceKm = distance;
+        } else {
+          payload.completedMinutes = Number.isFinite(minutes) ? minutes : 0;
+          payload.plannedMinutes = payload.completedMinutes; // align planned to completed for a one-shot log
+          if (Number.isFinite(distance) && distance > 0) payload.distanceKm = distance;
+        }
+        await api('/api/me/activities', { method: 'POST', body: JSON.stringify(payload) });
+      }
       status$.textContent = t('sheet.saved');
       status$.classList.add('sheet-status--ok');
       await loadDashboard();
@@ -655,7 +705,7 @@ function openCardioSheet(kindHint) {
       status$.classList.add('sheet-status--err');
     }
   });
-  openSheet(t('sheet.cardio.title'), tpl);
+  openSheet(t(isEdit ? 'sheet.cardio.title.edit' : 'sheet.cardio.title'), tpl);
 }
 
 /* ---------- Gym sheet ---------- */
@@ -768,7 +818,7 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-action]');
   if (!t) return;
   const action = t.dataset.action;
-  if (action === 'plan-cardio') openCardioSheet(t.dataset.kind || null);
+  if (action === 'plan-cardio') openCardioSheet({ kind: t.dataset.kind || null });
   else if (action === 'start-gym') openGymSheet(null);
 });
 
@@ -820,8 +870,9 @@ $('#profile-reset').addEventListener('click', async () => {
 /* ---------- Data wipe ---------- */
 
 $('#reset-button').addEventListener('click', async () => {
-  const phrase = prompt(t('me.deletePrompt'));
-  if (phrase !== 'DELETE') return;
+  const word = t('me.deleteConfirmWord');
+  const phrase = prompt(t('me.deletePrompt', { word }));
+  if ((phrase || '').trim().toLocaleUpperCase() !== word.toLocaleUpperCase()) return;
   const status = $('#reset-status');
   status.textContent = t('me.deleting');
   try {
